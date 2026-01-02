@@ -1,0 +1,116 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+    
+    // Helper function to check if user is inspector
+    function isInspector() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Inspector';
+    }
+    
+    // Helper function to check if user is client
+    function isClient() {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Client';
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Allow users to read their own document
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow admins to read all users
+      allow read: if isAdmin();
+      
+      // Allow user creation during signup
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow users to update their own profile
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Allow admins to update any user
+      allow update: if isAdmin();
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // Machines collection
+    match /machines/{machineId} {
+      // Everyone authenticated can read machines
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete machines
+      allow write: if isAdmin();
+    }
+    
+    // Inspections collection
+    match /inspections/{inspectionId} {
+      // Allow authenticated users to read inspections
+      // Admins can read all
+      // Inspectors can read their assigned inspections
+      // Clients can read their requested inspections
+      allow read: if isAuthenticated();
+      
+      // Allow admins and inspectors to create inspections
+      allow create: if isAdmin() || isInspector() || isClient();
+      
+      // Allow admins and assigned inspectors to update inspections
+      allow update: if isAdmin() || 
+                      (isInspector() && resource.data.assignedToId == request.auth.uid) ||
+                      (isClient() && resource.data.requestedById == request.auth.uid);
+      
+      // Only admins can delete inspections
+      allow delete: if isAdmin();
+    }
+    
+    // Forms collection
+    match /forms/{formId} {
+      // Everyone authenticated can read forms
+      allow read: if isAuthenticated();
+      
+      // Only admins can create, update, or delete forms
+      allow write: if isAdmin();
+    }
+    
+    // Assignments collection
+    match /assignments/{assignmentId} {
+      // Allow authenticated users to read assignments
+      allow read: if isAuthenticated();
+      
+      // Allow admins and inspectors to create/update assignments
+      allow write: if isAdmin() || isInspector();
+    }
+    
+    // Reports collection
+    match /reports/{reportId} {
+      // Allow authenticated users to read reports
+      allow read: if isAuthenticated();
+      
+      // Allow admins and inspectors to create/update reports
+      allow write: if isAdmin() || isInspector();
+    }
+    
+    // Meta collection for seeding tracking
+    match /_meta/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
