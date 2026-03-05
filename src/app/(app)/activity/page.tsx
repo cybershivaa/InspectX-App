@@ -8,9 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useAppContext } from '@/hooks/useAppContext';
 import { useToast } from '@/hooks/use-toast';
-import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, getDocs, query, where, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from '@/lib/supabase';
+// All Firebase Firestore and Storage logic replaced with Supabase below
 import { PlusCircle, FileText, Trash2, Download, Loader2, Edit2 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
@@ -67,24 +66,26 @@ export default function ActivityPage() {
 
   const fetchActivities = async () => {
     if (!user) return;
-    
+
     try {
-      const q = query(
-        collection(db, "activities"),
-        where("createdBy", "==", user.name)
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Activity[];
-      
-      // Sort by createdAt in JavaScript instead of Firestore
-      const sortedData = data.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      
-      setActivities(sortedData);
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('createdby', user.name)
+        .order('createdat', { ascending: false });
+
+      if (error) throw error;
+
+      // Normalize column names (support both camelCase and lowercase)
+      const normalized = (data || []).map((d: any): Activity => ({
+        ...d,
+        createdBy: d.createdBy ?? d.createdby ?? '',
+        createdAt: d.createdAt ?? d.createdat ?? '',
+        pdfUrl: d.pdfUrl ?? d.pdfurl ?? undefined,
+        pdfName: d.pdfName ?? d.pdfname ?? undefined,
+      }));
+
+      setActivities(normalized);
     } catch (error) {
       console.error("Error fetching activities:", error);
       toast({
@@ -134,9 +135,18 @@ export default function ActivityPage() {
       let pdfName = '';
 
       if (activityType === 'pdf' && pdfFile) {
-        const storageRef = ref(storage, `activities/${user.id}/${Date.now()}_${pdfFile.name}`);
-        await uploadBytes(storageRef, pdfFile);
-        pdfUrl = await getDownloadURL(storageRef);
+        const filePath = `${user.id}/${Date.now()}_${pdfFile.name}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('activities')
+          .upload(filePath, pdfFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('activities')
+          .getPublicUrl(uploadData.path);
+
+        pdfUrl = publicUrlData.publicUrl;
         pdfName = pdfFile.name;
       }
 
@@ -145,17 +155,22 @@ export default function ActivityPage() {
         const updateData: any = {
           title: title.trim(),
         };
-        
+
         if (activityType === 'note') {
           updateData.content = content.trim();
         }
-        
+
         if (pdfUrl && pdfName) {
-          updateData.pdfUrl = pdfUrl;
-          updateData.pdfName = pdfName;
+          updateData.pdfurl = pdfUrl;
+          updateData.pdfname = pdfName;
         }
 
-        await updateDoc(doc(db, "activities", editingId), updateData);
+        const { error } = await supabase
+          .from('activities')
+          .update(updateData)
+          .eq('id', editingId);
+
+        if (error) throw error;
 
         toast({
           title: "Success",
@@ -163,16 +178,25 @@ export default function ActivityPage() {
         });
       } else {
         // Create new activity
-        const activityData = {
+        const activityData: any = {
           type: activityType,
           title: title.trim(),
-          ...(activityType === 'note' ? { content: content.trim() } : {}),
-          ...(activityType === 'pdf' ? { pdfUrl, pdfName } : {}),
-          createdBy: user.name,
-          createdAt: new Date().toISOString(),
+          createdby: user.name,
+          createdat: new Date().toISOString(),
         };
 
-        await addDoc(collection(db, "activities"), activityData);
+        if (activityType === 'note') {
+          activityData.content = content.trim();
+        } else {
+          activityData.pdfurl = pdfUrl;
+          activityData.pdfname = pdfName;
+        }
+
+        const { error } = await supabase
+          .from('activities')
+          .insert(activityData);
+
+        if (error) throw error;
 
         toast({
           title: "Success",
@@ -215,7 +239,13 @@ export default function ActivityPage() {
     if (!deleteId) return;
 
     try {
-      await deleteDoc(doc(db, "activities", deleteId));
+      const { error } = await supabase
+        .from('activities')
+        .delete()
+        .eq('id', deleteId);
+
+      if (error) throw error;
+
       toast({
         title: "Success",
         description: "Activity deleted successfully.",

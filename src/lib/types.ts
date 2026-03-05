@@ -14,9 +14,10 @@ export interface PendingUser {
   id: string;
   name: string;
   email: string;
+  password: string;
   role: 'Inspector' | 'Client';
   status: 'pending';
-  requestedAt: string;
+  requestedat: string;
 }
 
 export type MachineStatus = 'Active' | 'Maintenance' | 'Inactive';
@@ -31,7 +32,7 @@ export interface Machine {
 }
 
 export type InspectionStatus = 'Completed' | 'Pending' | 'Failed' | 'Partial' | 'Upcoming';
-export type Priority = 'High' | 'Medium' | 'Low';
+export type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type ActivityType = 'Inspection' | 'Maintenance' | 'Repair' | 'Calibration';
 
 export interface Inspection {
@@ -66,6 +67,7 @@ export interface Anomaly {
   machineId: string;
   timestamp: string;
   message: string;
+  inspectionId?: string; // Link to the inspection for detailed view
 }
 
 export type FormFieldType = 'text' | 'number' | 'select' | 'textarea' | 'checkbox';

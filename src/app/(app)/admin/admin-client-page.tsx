@@ -22,8 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Role, User, PendingUser, Inspection } from "@/lib/types";
-import { db, auth } from "@/lib/firebase";
-import { collection, getDocs, doc, setDoc, deleteDoc, query, where, orderBy } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
 import { useAppContext } from "@/hooks/useAppContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -47,63 +46,73 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { updateUserRole, deleteUser, rejectUser } from "@/app/actions/users";
-import { Input } from "@/components/ui/input";
+import { updateUserRole, deleteUser, rejectUser, getPendingUsers } from "@/app/actions/users";
+import { getUsers, getInspections } from "@/app/actions/data";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { createUserWithEmailAndPassword } from "firebase/auth";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 
-function ApproveUserDialog({ user, isOpen, onOpenChange, onApproved }: { user: PendingUser, isOpen: boolean, onOpenChange: (open: boolean) => void, onApproved: (newUser: User) => void }) {
-    const [password, setPassword] = useState('');
+function ApproveUserDialog({ user, isOpen, onOpenChange, onApproved, setPendingUsers }: { user: PendingUser, isOpen: boolean, onOpenChange: (open: boolean) => void, onApproved: (newUser: User) => void, setPendingUsers: React.Dispatch<React.SetStateAction<PendingUser[]>> }) {
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
 
     const handleApprove = () => {
-        if (password.length < 8) {
-            toast({ variant: 'destructive', title: 'Invalid Password', description: 'Password must be at least 8 characters long.'});
-            return;
-        }
+      if (!user.password || user.password.length < 8) {
+        toast({ variant: 'destructive', title: 'Invalid Request', description: 'Pending user does not have a valid password.' });
+        return;
+      }
 
-        startTransition(async () => {
-            try {
-                // Create Firebase Auth user
-                const userCredential = await createUserWithEmailAndPassword(auth, user.email, password);
-                const newUserId = userCredential.user.uid;
-                
-                // Create Firestore user document
-                const newUser: User = {
-                    id: newUserId,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                    avatar: '',
-                };
-                
-                await setDoc(doc(db, 'users', newUserId), newUser);
-                
-                // Delete pending request
-                await deleteDoc(doc(db, 'pendingUsers', user.id));
-                
-                toast({ 
-                    title: 'User Approved Successfully', 
-                    description: `Account created for ${user.email}. Password: ${password}`,
-                    duration: 10000,
-                });
-                
-                onApproved(newUser);
-                onOpenChange(false);
-                setPassword('');
-            } catch (error: any) {
-                console.error('Error approving user:', error);
-                toast({ 
-                    variant: 'destructive', 
-                    title: 'Approval Failed', 
-                    description: error.message || 'An error occurred while approving the user.' 
-                });
-            }
-        });
+      startTransition(async () => {
+        try {
+          // All operations (create auth user, insert users table, delete pending_users)
+          // are handled server-side via the API route using the service role key.
+          const response = await fetch('/api/approve-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: user.email,
+              password: user.password,
+              name: user.name,
+              role: user.role,
+              pendingUserId: user.id,
+            })
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            toast({
+              variant: 'destructive',
+              title: 'Approval Failed',
+              description: result.error || 'An error occurred while approving the user.',
+            });
+            return;
+          }
+
+          const newUser: User = {
+            id: result.user?.id || '',
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            avatar: ''
+          };
+
+          toast({
+            title: 'User Approved Successfully',
+            description: `Account created for ${user.email}. The user can now login with their credentials.`,
+            duration: 5000,
+          });
+          onApproved(newUser);
+          setPendingUsers(prev => prev.filter(u => u.id !== user.id));
+          onOpenChange(false);
+        } catch (error: any) {
+          console.error('Error approving user:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Approval Failed',
+            description: error.message || 'An unexpected error occurred.'
+          });
+        }
+      });
     };
 
     return (
@@ -112,25 +121,24 @@ function ApproveUserDialog({ user, isOpen, onOpenChange, onApproved }: { user: P
                 <DialogHeader>
                     <DialogTitle>Approve User: {user.name}</DialogTitle>
                     <DialogDescription>
-                        Set an initial password for this user. The credentials will be shown to you after approval to share with the user securely.
+                        Approve this user registration request. The user will be able to login with the credentials they provided during signup.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
+                    <p><span className="font-semibold">Name:</span> {user.name}</p>
                     <p><span className="font-semibold">Email:</span> {user.email}</p>
                     <p><span className="font-semibold">Requested Role:</span> <Badge>{user.role}</Badge></p>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="password">
-                            Initial Password
-                        </Label>
-                        <Input
-                            id="password"
-                            type="text"
-                            className="col-span-3"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Set temporary password (min 8 characters)"
-                        />
-                    </div>
+                    {user.requestedat && (
+                      <p className="text-sm text-muted-foreground">
+                        Requested on: {(() => {
+                          try {
+                            return format(new Date(user.requestedat), 'PPp');
+                          } catch {
+                            return 'Recently';
+                          }
+                        })()}
+                        </p>
+                    )}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -152,6 +160,10 @@ export function AdminClientPage() {
   const [selectedInspection, setSelectedInspection] = useState<Inspection | null>(null);
   const [isInspectionDialogOpen, setIsInspectionDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('users');
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [pendingLoaded, setPendingLoaded] = useState(false);
+  const [inspectionsLoaded, setInspectionsLoaded] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedPendingUser, setSelectedPendingUser] = useState<PendingUser | null>(null);
@@ -164,66 +176,75 @@ export function AdminClientPage() {
   const { toast } = useToast();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
+  // Fetch users via server action (uses service role key — bypasses RLS, sees all rows)
+  const fetchUsers = async () => {
+    if (usersLoaded) return;
+    try {
+      const usersData = await getUsers();
+      const sortedUsers = usersData.sort((a, b) => a.name.localeCompare(b.name));
+      setUsers(sortedUsers);
+      setUsersLoaded(true);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // Fetch pending users via server action (uses service role key)
+  const fetchPendingUsers = async () => {
+    if (pendingLoaded) return;
+    try {
+      const pendingData = await getPendingUsers();
+      setPendingUsers(pendingData);
+      setPendingLoaded(true);
+    } catch (error) {
+      console.error('Error fetching pending users:', error);
+    }
+  };
+
+  // Fetch inspections via server action (uses service role key)
+  const fetchInspections = async () => {
+    if (inspectionsLoaded) return;
+    try {
+      const inspectionsData = await getInspections();
+      const sortedInspections = inspectionsData.sort((a, b) => {
+        const dateA = new Date((a as any).createdat || (a as any).createdAt || '').getTime();
+        const dateB = new Date((b as any).createdat || (b as any).createdAt || '').getTime();
+        return dateB - dateA;
+      });
+      setCompletedInspections(sortedInspections);
+      setInspectionsLoaded(true);
+    } catch (error) {
+      console.error("Error fetching inspections:", error);
+    }
+  };
+
+  // Initial check - just verify admin status
   useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser || currentUser.role !== 'Admin') {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        // Fetch users
-        const usersSnapshot = await getDocs(collection(db, "users"));
-        const usersData = usersSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as User[];
-        // Sort users by name
-        usersData.sort((a, b) => a.name.localeCompare(b.name));
-        setUsers(usersData);
-        
-        // Fetch pending users
-        const pendingSnapshot = await getDocs(collection(db, "pendingUsers"));
-        const pendingData = pendingSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as PendingUser[];
-        setPendingUsers(pendingData);
-        
-        // Fetch completed inspections
-        const inspectionsQuery = query(
-          collection(db, "inspections"),
-          where("status", "==", "Completed")
-        );
-        const inspectionsSnapshot = await getDocs(inspectionsQuery);
-        const inspectionsData = inspectionsSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as Inspection[];
-        
-        // Sort by createdAt in JavaScript instead of Firestore
-        inspectionsData.sort((a, b) => {
-          const dateA = new Date(a.createdAt || '').getTime();
-          const dateB = new Date(b.createdAt || '').getTime();
-          return dateB - dateA; // desc order
-        });
-        
-        setCompletedInspections(inspectionsData);
-      } catch (error) {
-        console.error("Error fetching admin data:", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Could not fetch users data.",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+    if (!currentUser || currentUser.role !== 'Admin') {
+      setLoading(false);
+      return;
+    }
+    setLoading(false);
+    // Load initial tab data
+    fetchUsers();
+  }, [currentUser]);
+
+  // Load data when tab changes
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'Admin') return;
     
-    fetchData();
-  }, [currentUser, toast, refreshTrigger]);
+    switch(activeTab) {
+      case 'users':
+        fetchUsers();
+        break;
+      case 'pending':
+        fetchPendingUsers();
+        break;
+      case 'inspections':
+        fetchInspections();
+        break;
+    }
+  }, [activeTab, currentUser, refreshTrigger]);
 
   const roleColors: Record<Role, string> = {
     Admin: "#e62e00",
@@ -300,15 +321,28 @@ export function AdminClientPage() {
     if (!selectedUser || !selectedRole) return;
 
     startTransition(async () => {
-      const result = await updateUserRole(selectedUser.id, selectedRole);
-      if (result.success && result.data) {
-        setUsers(users.map(u => u.id === selectedUser.id ? result.data! : u));
-        toast({ title: "User Updated", description: "User role has been successfully changed." });
-      } else {
-        toast({ variant: "destructive", title: "Update Failed", description: result.error });
+      if (!currentUser?.id) {
+        toast({ title: "Error", description: "Admin authentication required.", variant: "destructive" });
+        return;
       }
-      setIsEditDialogOpen(false);
-      setSelectedUser(null);
+      try {
+        // Update role in Supabase
+        const { error } = await supabase.from('users').update({ role: selectedRole }).eq('id', selectedUser.id);
+        if (error) throw error;
+        // Update local state
+        const updatedUser = { ...selectedUser, role: selectedRole };
+        setUsers(users.map(u => u.id === selectedUser.id ? updatedUser : u));
+        toast({ title: "User Updated", description: "User role has been successfully changed." });
+        setIsEditDialogOpen(false);
+        setSelectedUser(null);
+      } catch (error: any) {
+        console.error("Failed to update user role:", error);
+        toast({ 
+          variant: "destructive", 
+          title: "Update Failed", 
+          description: error.message || "An unexpected error occurred." 
+        });
+      }
     });
   };
 
@@ -316,23 +350,53 @@ export function AdminClientPage() {
     if (!selectedUser) return;
     
     startTransition(async () => {
-      const result = await deleteUser(selectedUser.id);
-      if (result.success) {
-        setUsers(users.filter(u => u.id !== selectedUser.id));
-        toast({ title: "User Deleted", description: "User has been successfully deleted." });
-      } else {
-        toast({ variant: "destructive", title: "Deletion Failed", description: result.error });
+      if (!currentUser?.id) {
+        toast({ title: "Error", description: "Admin authentication required.", variant: "destructive" });
+        return;
       }
-       setIsDeleteDialogOpen(false);
-       setSelectedUser(null);
-    })
+      // Prevent admin from deleting themselves
+      if (selectedUser.id === currentUser.id) {
+        toast({ 
+          variant: "destructive", 
+          title: "Deletion Failed", 
+          description: "You cannot delete your own account." 
+        });
+        return;
+      }
+      try {
+        // Delete from Supabase users table
+        const { error } = await supabase.from('users').delete().eq('id', selectedUser.id);
+        if (error) throw error;
+        // Optionally: delete from Supabase Auth via admin API (requires backend function)
+        // Update local state
+        setUsers(users.filter(u => u.id !== selectedUser.id));
+        toast({ 
+          title: "User Deleted", 
+          description: "User has been deleted." 
+        });
+        setIsDeleteDialogOpen(false);
+        setSelectedUser(null);
+      } catch (error: any) {
+        console.error("Failed to delete user:", error);
+        toast({ 
+          variant: "destructive", 
+          title: "Deletion Failed", 
+          description: error.message || "An unexpected error occurred." 
+        });
+      }
+    });
   }
 
   const onUserApproved = (newUser: User) => {
       if (selectedPendingUser) {
         setPendingUsers(prev => prev.filter(u => u.id !== selectedPendingUser.id));
       }
-      setUsers(prev => [...prev, newUser]);
+      // Add to users list immediately and reset loaded flag so tab re-fetches fresh data
+      setUsers(prev => {
+        const exists = prev.some(u => u.id === newUser.id || u.email === newUser.email);
+        return exists ? prev.map(u => u.email === newUser.email ? newUser : u) : [...prev, newUser];
+      });
+      setUsersLoaded(false); // force re-fetch when User Management tab is visited
   }
   
   const handleViewInspection = (inspection: Inspection) => {
@@ -342,7 +406,7 @@ export function AdminClientPage() {
 
   return (
     <>
-    <Tabs defaultValue="users">
+    <Tabs defaultValue="users" value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="users">User Management</TabsTrigger>
             <TabsTrigger value="pending">
@@ -364,7 +428,7 @@ export function AdminClientPage() {
                             variant="outline" 
                             size="sm"
                             onClick={() => {
-                                setLoading(true);
+                                setUsersLoaded(false);
                                 setRefreshTrigger(prev => prev + 1);
                             }}
                         >
@@ -469,8 +533,8 @@ export function AdminClientPage() {
         <TabsContent value="inspections">
             <Card>
                 <CardHeader>
-                    <CardTitle>Completed Inspections</CardTitle>
-                    <CardDescription>View details of all completed inspection reports.</CardDescription>
+                    <CardTitle>All Inspections</CardTitle>
+                    <CardDescription>View details of all inspection reports across all statuses.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {completedInspections.length > 0 ? (
@@ -480,6 +544,7 @@ export function AdminClientPage() {
                                     <TableHead>Report No</TableHead>
                                     <TableHead>Machine</TableHead>
                                     <TableHead>Agency</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead>Inspection Date</TableHead>
                                     <TableHead>Completed By</TableHead>
                                     <TableHead className="text-right">Action</TableHead>
@@ -491,6 +556,16 @@ export function AdminClientPage() {
                                         <TableCell className="font-medium">{inspection.fullReportData?.reportNo || 'N/A'}</TableCell>
                                         <TableCell>{inspection.machineName}</TableCell>
                                         <TableCell className="text-muted-foreground">{inspection.fullReportData?.agencyName || 'N/A'}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={
+                                                inspection.status === 'Completed' ? 'default' : 
+                                                inspection.status === 'Pending' ? 'secondary' :
+                                                inspection.status === 'Failed' ? 'destructive' :
+                                                'outline'
+                                            }>
+                                                {inspection.status}
+                                            </Badge>
+                                        </TableCell>
                                         <TableCell>{inspection.fullReportData?.inspectionDate ? format(new Date(inspection.fullReportData.inspectionDate), 'MMM dd, yyyy') : 'N/A'}</TableCell>
                                         <TableCell>{inspection.completedBy || 'N/A'}</TableCell>
                                         <TableCell className="text-right">
@@ -504,7 +579,7 @@ export function AdminClientPage() {
                             </TableBody>
                         </Table>
                     ) : (
-                        <p className="text-center text-muted-foreground py-12">No completed inspections found.</p>
+                        <p className="text-center text-muted-foreground py-12">No inspections found.</p>
                     )}
                 </CardContent>
             </Card>
@@ -572,6 +647,7 @@ export function AdminClientPage() {
             isOpen={isApproveDialogOpen}
             onOpenChange={setIsApproveDialogOpen}
             onApproved={onUserApproved}
+            setPendingUsers={setPendingUsers}
         />
       )}
       

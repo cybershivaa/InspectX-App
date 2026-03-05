@@ -12,8 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Upload, Paperclip } from 'lucide-react';
 import type { InspectionReportFormValues } from './page';
 import { useToast } from '@/hooks/use-toast';
-import { storage } from '@/lib/firebase';
-import { ref, uploadBytes } from 'firebase/storage';
+import { supabase } from '@/lib/supabase';
+// All Firebase storage logic replaced with Supabase Storage below
 
 interface ChecklistItemProps {
     name: keyof InspectionReportFormValues;
@@ -35,12 +35,16 @@ function ChecklistItem({ name, title, acceptanceCriteria }: ChecklistItemProps) 
         setIsUploading(true);
         setFileName(file.name);
         try {
-            const filePath = `inspections/${name}/${file.name}-${Date.now()}`;
-            const storageRef = ref(storage, filePath);
-            await uploadBytes(storageRef, file);
-            
+            const filePath = `inspections/${name}/${Date.now()}_${file.name}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('inspections')
+              .upload(filePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('inspections').getPublicUrl(filePath);
             const fieldName = `${name}.imagePath` as const;
-            setValue(fieldName, filePath, { shouldValidate: true });
+            setValue(fieldName, urlData.publicUrl, { shouldValidate: true });
 
             toast({ title: 'Image Uploaded', description: 'The image has been successfully uploaded.' });
         } catch (error) {

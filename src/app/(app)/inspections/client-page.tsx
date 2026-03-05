@@ -10,8 +10,10 @@ import { Button } from "@/components/ui/button";
 import { useAppContext } from '@/hooks/useAppContext';
 import type { Inspection, User, InspectionStatus } from '@/lib/types';
 import { Download, CheckCircle, Clock, AlertCircle, Play, MoreHorizontal, User as UserIcon, Loader2, FileSearch, ListFilter, Check, FilePlus } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
+import { getUsers } from '@/app/actions/data';
+import { assignInspection, updateInspection } from '@/app/actions/inspections';
+// All Firebase Firestore logic replaced with Supabase below
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
@@ -25,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+// All Firestore doc/updateDoc/getDoc logic replaced with Supabase below
 import ReportViewDialog from '@/app/(app)/search/report-view-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -35,6 +37,13 @@ const statusConfig = {
   Failed: { icon: AlertCircle, color: 'text-red-500', variant: 'destructive' },
   Partial: { icon: AlertCircle, color: 'text-orange-500', variant: 'destructive' },
   Upcoming: { icon: Clock, color: 'text-blue-500', variant: 'secondary' },
+} as const;
+
+const priorityConfig = {
+  Critical: { variant: 'destructive' as const, icon: '🔴', sortOrder: 4 },
+  High: { variant: 'destructive' as const, icon: '🟠', sortOrder: 3 },
+  Medium: { variant: 'secondary' as const, icon: '🟡', sortOrder: 2 },
+  Low: { variant: 'outline' as const, icon: '🟢', sortOrder: 1 },
 } as const;
 
 
@@ -57,25 +66,30 @@ function InspectionsClientPageComponent() {
         return;
       }
       
-      try {
-        const inspectionsQuery = query(collection(db, "inspections"), orderBy("createdAt", "desc"));
-        const inspectionsSnapshot = await getDocs(inspectionsQuery);
-        const inspectionsData = inspectionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Inspection[];
-        setInspections(inspectionsData);
-        
-        // Fetch all users (Inspectors and Clients) for assignment
-        const usersQuery = collection(db, "users");
-        const usersSnapshot = await getDocs(usersQuery);
-        const usersData = usersSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as User[];
-        // Filter to only Inspectors and Clients
-        const assignableUsers = usersData.filter(u => u.role === 'Inspector' || u.role === 'Client');
+        try {
+        const { data: inspData, error: inspError } = await supabase.from('inspections').select('*');
+        if (inspError) throw inspError;
+
+        // Normalize column names (support both camelCase Firestore style and lowercase Supabase style)
+        const normalized = (inspData || []).map((d: any): Inspection => ({
+          ...d,
+          machineId: d.machineId ?? d.machineid ?? '',
+          machineSlNo: d.machineSlNo ?? d.machineslno ?? '',
+          machineName: d.machineName ?? d.machinename ?? '',
+          requestedBy: d.requestedBy ?? d.requestedby ?? '',
+          assignedTo: d.assignedTo ?? d.assignedto ?? undefined,
+          dueDate: d.dueDate ?? d.duedate ?? '',
+          requestDate: d.requestDate ?? d.requestdate ?? '',
+          createdAt: d.createdAt ?? d.createdat ?? '',
+          completedAt: d.completedAt ?? d.completedat ?? undefined,
+          inspectedBy: d.inspectedBy ?? d.inspectedby ?? undefined,
+          fullReportData: d.fullReportData ?? d.fullreportdata ?? undefined,
+        }));
+        setInspections(normalized);
+
+        // Use server action (service role) to bypass RLS and fetch all users
+        const usersData = await getUsers();
+        const assignableUsers = usersData.filter((u: User) => u.role === 'Inspector' || u.role === 'Client');
         setInspectors(assignableUsers);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -83,8 +97,20 @@ function InspectionsClientPageComponent() {
         setLoading(false);
       }
     };
-    
+
     fetchData();
+
+    // Real-time subscription for live updates
+    const channel = supabase
+      .channel('inspections-page-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user]);
   
   const initialStatus = searchParams.get('status');
@@ -144,30 +170,36 @@ function InspectionsClientPageComponent() {
       filtered = filtered.filter(i => i.status === activeTab);
     }
     
-    return filtered;
+    // Sort by priority (Critical/High first) then by creation date
+    return filtered.sort((a, b) => {
+      const priorityA = priorityConfig[a.priority as keyof typeof priorityConfig]?.sortOrder || 0;
+      const priorityB = priorityConfig[b.priority as keyof typeof priorityConfig]?.sortOrder || 0;
+      
+      if (priorityB !== priorityA) {
+        return priorityB - priorityA; // Higher priority first
+      }
+      
+      // If same priority, sort by creation date (newest first)
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
   };
 
   const displayedInspections = getDisplayedInspections();
   
   const handleAssign = (inspectionId: string, inspectorId: string, inspectorName: string) => {
     startTransition(async () => {
-        try {
-            const inspectionRef = doc(db, "inspections", inspectionId);
-            await updateDoc(inspectionRef, { 
-                assignedTo: inspectorName,
-                status: "Pending" as const,
-            });
-            
-            const updatedDoc = await getDoc(inspectionRef);
-            if (updatedDoc.exists()) {
-                const updatedInspection = { id: updatedDoc.id, ...updatedDoc.data() } as Inspection;
-                setInspections(prev => prev.map(i => i.id === inspectionId ? updatedInspection : i));
-                toast({ title: "Inspection Assigned", description: `Assigned to ${inspectorName}.` });
-            }
-        } catch (error) {
-            console.error("Failed to assign inspection:", error);
-            toast({ variant: 'destructive', title: "Assignment Failed", description: "An unexpected error occurred." });
-        }
+      const result = await assignInspection(inspectionId, inspectorName);
+      if (result.success) {
+        setInspections(prev => prev.map(i =>
+          i.id === inspectionId ? { ...i, assignedTo: inspectorName, status: 'Pending' as const } : i
+        ));
+        toast({ title: "Inspection Assigned", description: `Assigned to ${inspectorName}.` });
+      } else {
+        console.error("Failed to assign inspection:", result.error);
+        toast({ variant: 'destructive', title: "Assignment Failed", description: result.error || "An unexpected error occurred." });
+      }
     });
   }
   
@@ -177,19 +209,17 @@ function InspectionsClientPageComponent() {
   
   const handleStatusUpdate = async (inspectionId: string, status: Inspection['status']) => {
     startTransition(async () => {
-      try {
-        const inspectionRef = doc(db, "inspections", inspectionId);
-        await updateDoc(inspectionRef, { status });
-        
-        setInspections(prev => prev.map(i => 
+      const result = await updateInspection({ id: inspectionId, status });
+      if (result.success) {
+        setInspections(prev => prev.map(i =>
           i.id === inspectionId ? { ...i, status } : i
         ));
         toast({ title: "Inspection Updated", description: `Status changed to ${status}.` });
-      } catch (error) {
-        console.error("Failed to update inspection:", error);
-        toast({ variant: 'destructive', title: "Update Failed", description: "An unexpected error occurred." });
+      } else {
+        console.error("Failed to update inspection:", result.error);
+        toast({ variant: 'destructive', title: "Update Failed", description: result.error || "An unexpected error occurred." });
       }
-    })
+    });
   }
 
   const handleDownloadReport = (inspectionId: string) => {
@@ -199,7 +229,6 @@ function InspectionsClientPageComponent() {
       setIsReportOpen(true);
     } else {
        toast({
-        variant: "secondary",
         title: "No Report Available",
         description: "A detailed PDF report is not available for this inspection.",
       });
@@ -213,7 +242,6 @@ function InspectionsClientPageComponent() {
       setIsReportOpen(true);
     } else {
       toast({
-        variant: "secondary",
         title: "No Report Available",
         description: "A detailed report is not available for this inspection.",
       });
@@ -290,15 +318,18 @@ function InspectionsClientPageComponent() {
                   <TableRow key={inspection.id}>
                     <TableCell className="font-medium">
                       {inspection.machineName}
-                      {user.role === 'Client' && inspection.assignedTo === user.name && (
+                      {(['Client', 'Inspector'] as string[]).includes(user.role) && inspection.assignedTo === user.name && (
                         <Badge variant="secondary" className="ml-2">Assigned to You</Badge>
                       )}
                     </TableCell>
                     <TableCell>{inspection.requestedBy}</TableCell>
                     <TableCell>{inspection.assignedTo || <Badge variant="outline">Unassigned</Badge>}</TableCell>
                     <TableCell>
-                      <Badge variant={inspection.priority === 'High' ? 'destructive' : inspection.priority === 'Medium' ? 'secondary' : 'outline'}>
-                        {inspection.priority}
+                      <Badge 
+                        variant={priorityConfig[inspection.priority as keyof typeof priorityConfig]?.variant || 'outline'}
+                        className="font-semibold"
+                      >
+                        {priorityConfig[inspection.priority as keyof typeof priorityConfig]?.icon} {inspection.priority}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -315,12 +346,16 @@ function InspectionsClientPageComponent() {
                               {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            {user.role === 'Admin' && !inspection.assignedTo && (
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+
+                            {/* ── ADMIN OPTIONS ── */}
+                            {user.role === 'Admin' && (
                               <DropdownMenuSub>
                                 <DropdownMenuSubTrigger>
                                   <UserIcon className="mr-2 h-4 w-4" />
-                                  Assign User
+                                  {inspection.assignedTo ? 'Reassign User' : 'Assign User'}
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent>
                                   {inspectors.length > 0 ? (
@@ -336,21 +371,30 @@ function InspectionsClientPageComponent() {
                               </DropdownMenuSub>
                             )}
 
-                            {user.role === 'Inspector' && ['Pending', 'Upcoming'].includes(inspection.status) && (
+                            {user.role === 'Admin' && inspection.assignedTo && inspection.status !== 'Completed' && (
                               <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
                                 <Play className="mr-2 h-4 w-4" />
-                                {inspection.assignedTo === user.name ? 'Start Inspection' : 'Start Self-Inspection'}
+                                Start Inspection
                               </DropdownMenuItem>
                             )}
 
+                            {/* ── INSPECTOR OPTIONS ── */}
                             {user.role === 'Inspector' && !inspection.assignedTo && (
                               <DropdownMenuItem onClick={() => handleTakeInspection(inspection.id)}>
                                 <UserIcon className="mr-2 h-4 w-4" />
                                 Take Inspection
                               </DropdownMenuItem>
                             )}
-                            
-                            {inspection.status === 'Completed' && (user.role === 'Admin' || user.role === 'Client') && (
+
+                            {(user.role === 'Inspector' || user.role === 'Client') && inspection.assignedTo === user.name && ['Pending', 'Upcoming'].includes(inspection.status) && (
+                              <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
+                                <Play className="mr-2 h-4 w-4" />
+                                Start Inspection
+                              </DropdownMenuItem>
+                            )}
+
+                            {/* ── COMPLETED REPORT OPTIONS ── */}
+                            {inspection.status === 'Completed' && (
                               <>
                                 <DropdownMenuItem onClick={() => handleViewReport(inspection.id)}>
                                   <FileSearch className="mr-2 h-4 w-4" />
@@ -363,35 +407,26 @@ function InspectionsClientPageComponent() {
                               </>
                             )}
 
-                            {inspection.status === 'Completed' && user.role === 'Client' && (
-                              <DropdownMenuItem onClick={() => handleDownloadReport(inspection.id)}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download Report
-                              </DropdownMenuItem>
-                            )}
-
-                             {inspection.status === 'Completed' && user.role === 'Inspector' && (
-                              <DropdownMenuItem onClick={() => handleDownloadReport(inspection.id)}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download Report
-                              </DropdownMenuItem>
-                            )}
-
-                             {user.role === 'Admin' && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger>Update Status</DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent>
-                                       {(Object.keys(statusConfig) as (keyof typeof statusConfig)[]).map(status => (
-                                        <DropdownMenuItem key={status} onClick={() => handleStatusUpdate(inspection.id, status)}>
-                                          {status}
+                            {/* ── ADMIN STATUS UPDATE ── */}
+                            {user.role === 'Admin' && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuSub>
+                                  <DropdownMenuSubTrigger>Update Status</DropdownMenuSubTrigger>
+                                  <DropdownMenuSubContent>
+                                    {(Object.keys(statusConfig) as (keyof typeof statusConfig)[]).map(s => {
+                                      const sc = statusConfig[s];
+                                      return (
+                                        <DropdownMenuItem key={s} onClick={() => handleStatusUpdate(inspection.id, s)}>
+                                          <sc.icon className={`mr-2 h-4 w-4 ${sc.color}`} />
+                                          {s}
                                         </DropdownMenuItem>
-                                      ))}
-                                    </DropdownMenuSubContent>
-                                  </DropdownMenuSub>
-                                </>
-                             )}
+                                      );
+                                    })}
+                                  </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                     </TableCell>
@@ -413,7 +448,7 @@ function InspectionsClientPageComponent() {
         <ReportViewDialog
           isOpen={isReportOpen}
           onClose={() => setIsReportOpen(false)}
-          reportData={selectedReport}
+          reportData={selectedReport as any}
         />
       )}
     </>

@@ -10,8 +10,8 @@ import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from '@/hooks/useAppContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
+// All Firebase Firestore logic replaced with Supabase below
 import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import type { FieldPath } from 'react-hook-form';
@@ -233,6 +233,49 @@ const equipmentFieldMapping: Record<string, FieldPath<InspectionReportFormValues
     'turbogenerator': ['powerTransformerInspections'],
 };
 
+// Maps machine SL No or machine name keywords → equipmentName slug
+const machineSlNoToEquipmentSlug: Record<string, string> = {
+  'NTPC-HTM-001': 'ht-motor',
+  'NTPC-LTM-002': 'lt-motor',
+  'NTPC-CBL-003': 'cable-laying',
+  'NTPC-TPC-004': 'testing-power-cables',
+  'NTPC-CT-005': 'cable-trays',
+  'NTPC-ES-006': 'earthing-system',
+  'NTPC-SWG-007': 'ht-lt-switchgear',
+  'NTPC-LTP-008': 'lt-panels',
+  'NTPC-BSD-009': 'busduct',
+  'NTPC-STL-010': 'station-lighting',
+  'NTPC-LPH-011': 'lighting-pole',
+  'NTPC-MISC-012': 'misc-equipment',
+  'NTPC-CI-013': 'ci-equipments',
+  'NTPC-PT-014': 'power-transformer',
+  'NTPC-OT-015': 'outdoor-transformer',
+  'NTPC-ELV-016': 'elevator',
+  'NTPC-TRB-017': 'turbogenerator',
+};
+
+const machineNameToEquipmentSlug = (name: string): string | null => {
+  const n = name.toLowerCase();
+  if (n.includes('ht motor') || n.includes('ht-motor')) return 'ht-motor';
+  if (n.includes('lt motor') || n.includes('lt-motor')) return 'lt-motor';
+  if (n.includes('cable laying') || n.includes('cable-laying')) return 'cable-laying';
+  if (n.includes('testing') && n.includes('cable')) return 'testing-power-cables';
+  if (n.includes('cable tray')) return 'cable-trays';
+  if (n.includes('earthing')) return 'earthing-system';
+  if (n.includes('switchgear') || n.includes('switch gear')) return 'ht-lt-switchgear';
+  if (n.includes('lt panel')) return 'lt-panels';
+  if (n.includes('busduct') || n.includes('bus duct')) return 'busduct';
+  if (n.includes('station lighting')) return 'station-lighting';
+  if (n.includes('lighting pole') || n.includes('high mast')) return 'lighting-pole';
+  if (n.includes('power transformer')) return 'power-transformer';
+  if (n.includes('outdoor transformer')) return 'outdoor-transformer';
+  if (n.includes('elevator')) return 'elevator';
+  if (n.includes('turbogenerator')) return 'turbogenerator';
+  if (n.includes('c&i') || n.includes('c & i')) return 'ci-equipments';
+  if (n.includes('misc')) return 'misc-equipment';
+  return null;
+};
+
 function FormLoadingSkeleton() {
   return (
     <CardContent className="space-y-8">
@@ -268,7 +311,7 @@ export default function InspectionReportPage() {
   const { toast } = useToast();
   const { user } = useAppContext();
   const [isPending, startTransition] = useTransition();
-  const [currentStep, setCurrentStep] = useState(2); // Start at Step 2 (machine-specific form)
+  const [currentStep, setCurrentStep] = useState(1); // Start at Step 1 so user confirms equipment selection
   const [isLoading, setIsLoading] = useState(true);
   const [submittedData, setSubmittedData] = useState<InspectionReportFormValues | null>(null);
   const [previousInspectionDate, setPreviousInspectionDate] = useState<string | null>(null);
@@ -322,74 +365,94 @@ export default function InspectionReportPage() {
     const fetchInspectionData = async () => {
         setIsLoading(true);
         try {
-            const inspectionRef = doc(db, "inspections", inspectionId);
-            const inspectionSnap = await getDoc(inspectionRef);
-            
-            if (inspectionSnap.exists()) {
-                const inspectionData = { id: inspectionSnap.id, ...inspectionSnap.data() } as any;
-                
-                // Check if user is authorized for this specific inspection
-                // Inspectors can do self-inspection (no assignment needed)
-                if (user && user.role === 'Client' && inspectionData.assignedTo !== user.name) {
-                    toast({
-                        variant: "destructive",
-                        title: "Unauthorized",
-                        description: "You are not assigned to this inspection.",
-                    });
-                    router.push('/inspections');
-                    return;
-                }
-                
-                // Fetch previous inspection for the same machine
-                if (inspectionData.machineSlNo) {
-                    try {
-                        const previousInspectionsQuery = query(
-                            collection(db, "inspections"),
-                            where("machineSlNo", "==", inspectionData.machineSlNo),
-                            where("status", "==", "Completed")
-                        );
-                        const previousInspectionsSnap = await getDocs(previousInspectionsQuery);
-                        
-                        // Filter and sort to get the most recent previous inspection
-                        const previousInspections = previousInspectionsSnap.docs
-                            .map(doc => ({
-                                id: doc.id,
-                                ...doc.data()
-                            }))
-                            .filter((insp: any) => insp.id !== inspectionId) // Exclude current inspection
-                            .sort((a: any, b: any) => {
-                                const dateA = a.completedAt || a.createdAt || '';
-                                const dateB = b.completedAt || b.createdAt || '';
-                                return new Date(dateB).getTime() - new Date(dateA).getTime();
-                            });
-                        
-                        if (previousInspections.length > 0) {
-                            const prevDate = previousInspections[0].completedAt || previousInspections[0].createdAt;
-                            if (prevDate) {
-                                setPreviousInspectionDate(prevDate);
-                            }
-                        }
-                    } catch (error) {
-                        console.error("Error fetching previous inspection:", error);
-                    }
-                }
-                
-                const reportData = inspectionData.fullReportData || {};
-                const combinedData = { ...inspectionData, ...reportData };
-                
-                // Convert ISO string back to Date object for the calendar
-                if (combinedData.inspectionDate) {
-                    combinedData.inspectionDate = new Date(combinedData.inspectionDate);
-                }
+            const { data: rawData, error: fetchError } = await supabase
+              .from('inspections')
+              .select('*')
+              .eq('id', inspectionId)
+              .single();
 
-                form.reset(combinedData);
-            } else {
+            if (fetchError || !rawData) {
                 toast({
                   variant: "destructive",
                   title: "Failed to load data",
                   description: "Could not find the requested inspection.",
                 });
+                return;
             }
+
+            // Normalize column names (support both camelCase and lowercase)
+            const inspectionData: any = {
+              ...rawData,
+              machineSlNo: rawData.machineSlNo ?? rawData.machineslno,
+              machineName: rawData.machineName ?? rawData.machinename,
+              requestedBy: rawData.requestedBy ?? rawData.requestedby,
+              assignedTo: rawData.assignedTo ?? rawData.assignedto,
+              createdAt: rawData.createdAt ?? rawData.createdat,
+              fullReportData: rawData.fullReportData ?? rawData.fullreportdata,
+            };
+
+            // Check if user is authorized for this specific inspection
+            if (user && user.role === 'Client' && inspectionData.assignedTo !== user.name) {
+                toast({
+                    variant: "destructive",
+                    title: "Unauthorized",
+                    description: "You are not assigned to this inspection.",
+                });
+                router.push('/inspections');
+                return;
+            }
+
+            // Fetch previous inspection for the same machine
+            const machineSlNo = inspectionData.machineSlNo;
+            if (machineSlNo) {
+                try {
+                    const { data: prevData } = await supabase
+                      .from('inspections')
+                      .select('id, completedat, createdat')
+                      .eq('machineslno', machineSlNo)
+                      .eq('status', 'Completed')
+                      .neq('id', inspectionId);
+
+                    const previousInspections = (prevData || [])
+                        .sort((a: any, b: any) => {
+                            const dateA = a.completedat || a.createdat || '';
+                            const dateB = b.completedat || b.createdat || '';
+                            return new Date(dateB).getTime() - new Date(dateA).getTime();
+                        });
+
+                    if (previousInspections.length > 0) {
+                        const prevDate = (previousInspections[0] as any).completedat || (previousInspections[0] as any).createdat;
+                        if (prevDate) setPreviousInspectionDate(prevDate);
+                    }
+                } catch (error) {
+                    console.error("Error fetching previous inspection:", error);
+                }
+            }
+
+            const reportData = inspectionData.fullReportData || {};
+            const combinedData: any = { ...inspectionData, ...reportData };
+            if (combinedData.inspectionDate) {
+                combinedData.inspectionDate = new Date(combinedData.inspectionDate);
+            }
+
+            // Auto-populate equipmentName if missing (e.g. inspections created without it)
+            if (!combinedData.equipmentName || (Array.isArray(combinedData.equipmentName) && combinedData.equipmentName.length === 0)) {
+                const slNo = (combinedData.machineSlNo || combinedData.machineslno || '');
+                const machineName = (combinedData.machineName || combinedData.machinename || '');
+                const slugFromSlNo = machineSlNoToEquipmentSlug[slNo];
+                const slugFromName = machineNameToEquipmentSlug(machineName);
+                const resolvedSlug = slugFromSlNo || slugFromName;
+                if (resolvedSlug) {
+                    combinedData.equipmentName = [resolvedSlug];
+                }
+            }
+
+            // Ensure machineSlNo is populated
+            if (!combinedData.machineSlNo) {
+                combinedData.machineSlNo = combinedData.machineslno || '';
+            }
+
+            form.reset(combinedData);
         } catch (error) {
              toast({
               variant: "destructive",
@@ -443,27 +506,27 @@ export default function InspectionReportPage() {
       try {
         console.log('Preparing submission data...');
         const submissionData = { ...values, inspectedBy: user.name };
-        const inspectionRef = doc(db, "inspections", inspectionId);
-        
+
         const reportData = {
           ...submissionData,
           inspectionDate: submissionData.inspectionDate.toISOString(),
         };
-        
-        // Remove undefined values to prevent Firestore errors
-        const cleanedReportData = removeUndefined(reportData);
-        
-        console.log('Updating Firestore...');
-        await updateDoc(inspectionRef, {
-          fullReportData: cleanedReportData,
-          machineSlNo: cleanedReportData.machineSlNo,
-          status: "Completed",
-          inspectedBy: cleanedReportData.inspectedBy,
-          completedAt: new Date().toISOString(),
-          completedBy: user.name
-        });
 
-        console.log('Firestore updated successfully');
+        const cleanedReportData = removeUndefined(reportData);
+
+        const { error: updateError } = await supabase
+          .from('inspections')
+          .update({
+            fullreportdata: cleanedReportData,
+            machineslno: cleanedReportData.machineSlNo,
+            status: 'Completed',
+            inspectedby: cleanedReportData.inspectedBy,
+            completedat: new Date().toISOString(),
+            completedby: user.name,
+          })
+          .eq('id', inspectionId);
+
+        if (updateError) throw updateError;
         toast({
           title: "Inspection Completed Successfully",
           description: `Report submitted and saved. Admin can now download the PDF.`,
@@ -562,7 +625,7 @@ export default function InspectionReportPage() {
     );
   }
 
-  if (!user || user.role !== 'Inspector') {
+  if (!user || !['Inspector', 'Client', 'Admin'].includes(user.role)) {
      return (
        <Card>
         <CardHeader>

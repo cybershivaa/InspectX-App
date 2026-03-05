@@ -5,8 +5,8 @@ import React, { useEffect, useState } from 'react';
 import type { InspectionReportFormValues } from './page';
 import { format } from 'date-fns';
 import Image from 'next/image';
-import { storage } from '@/lib/firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { supabase } from '@/lib/supabase';
+// All Firebase storage logic replaced with Supabase Storage below
 import { cn } from '@/lib/utils';
 
 interface ReportViewProps {
@@ -172,15 +172,13 @@ const ChecklistItemView = ({ name, result, index }: { name: string; result?: { r
 
     useEffect(() => {
         if (result?.imagePath) {
-            const fetchUrl = async () => {
-                try {
-                    const url = await getDownloadURL(ref(storage, result.imagePath));
-                    setImageUrl(url);
-                } catch (error) {
-                    console.error("Failed to get image download URL", error);
-                }
-            };
-            fetchUrl();
+            // If already a full URL (new format), use directly; otherwise get Supabase public URL (legacy path)
+            if (result.imagePath.startsWith('http')) {
+                setImageUrl(result.imagePath);
+            } else {
+                const { data } = supabase.storage.from('inspections').getPublicUrl(result.imagePath);
+                setImageUrl(data.publicUrl);
+            }
         }
     }, [result?.imagePath]);
 
@@ -228,16 +226,12 @@ function ReportFileView({ label, path }: { label: string, path?: string}) {
 
     useEffect(() => {
         if (path) {
-            const fetchUrl = async () => {
-                try {
-                    const url = await getDownloadURL(ref(storage, path));
-                    setFileUrl(url);
-                } catch (error) {
-                    console.error("Failed to get file download URL", error);
-                    setFileUrl('#');
-                }
-            };
-            fetchUrl();
+            if (path.startsWith('http')) {
+                setFileUrl(path);
+            } else {
+                const { data } = supabase.storage.from('inspections').getPublicUrl(path);
+                setFileUrl(data.publicUrl);
+            }
         }
     }, [path]);
 
@@ -262,15 +256,12 @@ function DeviationView({ deviation, index }: { deviation: { deviations?: string,
 
     useEffect(() => {
         if (deviation.imagePath) {
-            const fetchUrl = async () => {
-                try {
-                    const url = await getDownloadURL(ref(storage, deviation.imagePath));
-                    setImageUrl(url);
-                } catch (error) {
-                    console.error("Failed to get image download URL", error);
-                }
-            };
-            fetchUrl();
+            if (deviation.imagePath.startsWith('http')) {
+                setImageUrl(deviation.imagePath);
+            } else {
+                const { data } = supabase.storage.from('inspections').getPublicUrl(deviation.imagePath);
+                setImageUrl(data.publicUrl);
+            }
         }
     }, [deviation.imagePath]);
     
@@ -360,7 +351,7 @@ export function ReportView({ data, previousInspectionDate }: ReportViewProps) {
               </div>
               <div>
                 <p className="text-sm font-bold text-black">Date of Inspection</p>
-                <p className="text-sm text-gray-700">{data.inspectionDate ? format(new Date(data.inspectionDate), 'dd-MM-yyyy') : '--'}</p>
+                <p className="text-sm text-gray-700">{data.inspectionDate && !isNaN(new Date(data.inspectionDate).getTime()) ? format(new Date(data.inspectionDate), 'dd-MM-yyyy') : '--'}</p>
               </div>
             </div>
 
@@ -380,7 +371,7 @@ export function ReportView({ data, previousInspectionDate }: ReportViewProps) {
               </div>
               <div>
                 <p className="text-sm font-bold text-black">Previous Inspection Date</p>
-                <p className="text-sm text-gray-700">{previousInspectionDate ? format(new Date(previousInspectionDate), 'dd-MM-yyyy') : 'First Inspection'}</p>
+                <p className="text-sm text-gray-700">{previousInspectionDate && !isNaN(new Date(previousInspectionDate).getTime()) ? format(new Date(previousInspectionDate), 'dd-MM-yyyy') : 'First Inspection'}</p>
               </div>
             </div>
 

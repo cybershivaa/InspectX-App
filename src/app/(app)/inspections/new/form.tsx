@@ -21,8 +21,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Combobox } from '@/components/ui/combobox';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
+// All Firebase Firestore logic replaced with Supabase below
 import Image from 'next/image';
 
 const equipmentNames = [
@@ -86,6 +86,9 @@ const formSchema = z.object({
     message: "You have to select at least one equipment item.",
   }),
   reportNo: z.string().min(1, "Report number is required."),
+  priority: z.enum(["Low", "Medium", "High", "Critical"], {
+    required_error: "You need to select a priority level.",
+  }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -107,6 +110,7 @@ export function NewInspectionForm() {
       machineSlNo: "",
       reportNo: "FQA/N/",
       equipmentName: [],
+      priority: "Medium",
     },
   });
 
@@ -137,25 +141,26 @@ export function NewInspectionForm() {
         const selectedMachine = machineOptions.find(m => m.value === values.machineSlNo);
         const machineName = selectedMachine ? selectedMachine.label.split(' (')[0] : 'N/A';
         
-        const newInspection = {
-          machineId: values.reportNo || `rep-${Date.now()}`,
-          machineSlNo: values.machineSlNo,
-          machineName: machineName,
-          priority: 'Medium',
-          status: "Upcoming" as const,
-          requestedBy: user.name,
-          requestDate: new Date().toISOString().split('T')[0],
-          dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          notes: values.equipmentDetails,
-          fullReportData: {
-            ...values,
-            inspectionDate: values.inspectionDate.toISOString(),
-          },
-          createdAt: Timestamp.now(),
-        };
-        
-        const docRef = await addDoc(collection(db, "inspections"), newInspection);
-        await updateDoc(docRef, { id: docRef.id });
+        const { error: insertError } = await supabase
+          .from('inspections')
+          .insert({
+            machineid: values.reportNo || `rep-${Date.now()}`,
+            machineslno: values.machineSlNo,
+            machinename: machineName,
+            priority: values.priority,
+            status: 'Upcoming',
+            requestedby: user.name,
+            requestdate: new Date().toISOString().split('T')[0],
+            duedate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            notes: values.equipmentDetails,
+            fullreportdata: {
+              ...values,
+              inspectionDate: values.inspectionDate.toISOString(),
+            },
+            createdat: new Date().toISOString(),
+          });
+
+        if (insertError) throw insertError;
 
         toast({
           title: "Inspection Call Created",
@@ -278,6 +283,43 @@ export function NewInspectionForm() {
                           />
                         </PopoverContent>
                       </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="priority"
+                  render={({ field }) => (
+                    <FormItem className="space-y-3">
+                      <FormLabel>Priority Level <span className="text-red-500">*</span></FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          className="flex flex-col space-y-1"
+                        >
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl><RadioGroupItem value="Low" /></FormControl>
+                            <FormLabel className="font-normal">🟢 Low - Routine check</FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl><RadioGroupItem value="Medium" /></FormControl>
+                            <FormLabel className="font-normal">🟡 Medium - Normal priority</FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl><RadioGroupItem value="High" /></FormControl>
+                            <FormLabel className="font-normal">🟠 High - Urgent attention</FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl><RadioGroupItem value="Critical" /></FormControl>
+                            <FormLabel className="font-normal">🔴 Critical - Immediate action</FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormDescription>
+                        High and Critical priorities will be assigned to inspectors automatically when available.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

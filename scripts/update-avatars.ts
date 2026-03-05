@@ -1,34 +1,37 @@
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import * as path from 'path';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, collection, getDocs, writeBatch, doc } from 'firebase/firestore';
 
-// Initialize Firebase Admin
-if (getApps().length === 0) {
-  const serviceAccountPath = path.join(process.cwd(), 'service-account-key.json');
-  initializeApp({
-    credential: cert(serviceAccountPath)
-  });
-}
+// Initialize Firebase with your config
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
 
-const db = getFirestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 async function updateAvatars() {
   try {
     console.log('Starting avatar update...');
     
     // Get all users from Firestore
-    const usersSnapshot = await db.collection('users').get();
+    const usersSnapshot = await getDocs(collection(db, 'users'));
     
     let updateCount = 0;
-    const batch = db.batch();
+    const batch = writeBatch(db);
     
-    usersSnapshot.forEach((doc) => {
-      const userData = doc.data();
+    usersSnapshot.forEach((docSnapshot) => {
+      const userData = docSnapshot.data();
       
       // Check if avatar is a placeholder URL
       if (userData.avatar && userData.avatar.includes('placehold.co')) {
         console.log(`Updating avatar for user: ${userData.name} (${userData.email})`);
-        batch.update(doc.ref, { avatar: '' });
+        const userRef = doc(db, 'users', docSnapshot.id);
+        batch.update(userRef, { avatar: '' });
         updateCount++;
       }
     });

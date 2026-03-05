@@ -3,36 +3,24 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/firebase";
-import { collection, addDoc, doc, setDoc, getDoc, updateDoc, serverTimestamp, Timestamp } from "firebase/firestore";
+import { createAdminClient } from "@/lib/supabase";
 import type { Inspection } from "@/lib/types";
-
-// Helper function to safely convert Firestore Timestamps to strings in nested objects
-const serializeTimestamps = (docData: any) => {
-    if (!docData) return docData;
-    const data = { ...docData };
-    for (const key in data) {
-        if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        } else if (data[key] && typeof data[key] === 'object' && !Array.isArray(data[key])) {
-            data[key] = serializeTimestamps(data[key]);
-        }
-    }
-    return data;
-};
 
 
 export async function getInspectionById(id: string) {
     try {
-        const inspectionDocRef = doc(db, "inspections", id);
-        const docSnap = await getDoc(inspectionDocRef);
+        const supabaseAdmin = createAdminClient();
+        const { data, error } = await supabaseAdmin
+            .from('inspections')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-        if (!docSnap.exists()) {
+        if (error || !data) {
             return { success: false, error: "Inspection not found." };
         }
-        
-        const data = serializeTimestamps({ id: docSnap.id, ...docSnap.data() }) as Inspection;
-        return { success: true, data };
+
+        return { success: true, data: data as Inspection };
 
     } catch (error) {
         console.error("Failed to fetch inspection:", error);
@@ -70,34 +58,42 @@ export async function createInspectionCall(input: CreateInspectionInput, request
       console.error("Invalid input data:", validationResult.error.flatten());
       return { success: false, error: "Invalid input data." };
     }
-    
+
+    const supabaseAdmin = createAdminClient();
     const { machineName, priority, notes, fullReport, machineSlNo } = validationResult.data;
 
     const newInspection = {
-      machineId: fullReport?.reportNo || `rep-${Date.now()}`,
-      machineSlNo: machineSlNo,
-      machineName: machineName,
+      machineid: fullReport?.reportNo || `rep-${Date.now()}`,
+      machineslno: machineSlNo,
+      machinename: machineName,
       priority,
-      status: "Upcoming" as const,
-      requestedBy,
-      requestDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due in 10 days
-      notes: notes || fullReport?.equipmentDetails,
-      fullReportData: fullReport ? {
+      status: "Upcoming",
+      requestedby: requestedBy,
+      requestdate: new Date().toISOString().split('T')[0],
+      duedate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      notes: notes || fullReport?.equipmentDetails || null,
+      fullreportdata: fullReport ? {
         ...fullReport,
         inspectionDate: fullReport.inspectionDate.toISOString(),
       } : null,
-      createdAt: Timestamp.now(),
+      createdat: new Date().toISOString(),
     };
-    
-    const docRef = await addDoc(collection(db, "inspections"), newInspection);
 
-    await updateDoc(docRef, { id: docRef.id });
-    
+    const { data, error } = await supabaseAdmin
+      .from('inspections')
+      .insert(newInspection)
+      .select()
+      .single();
+
+    if (error || !data) {
+      console.error("createInspectionCall insert error:", error?.message);
+      return { success: false, error: error?.message || "Failed to create inspection." };
+    }
+
     revalidatePath("/dashboard");
     revalidatePath("/inspections");
 
-    return { success: true, data: { ...newInspection, id: docRef.id, createdAt: newInspection.createdAt.toDate().toISOString() } };
+    return { success: true, data: data as Inspection };
   } catch (error) {
     console.error("Failed to create inspection call:", error);
     return { success: false, error: "An unexpected error occurred while creating the inspection call." };
@@ -117,26 +113,51 @@ export async function updateInspection(input: UpdateInspectionInput) {
     if (!validationResult.success) {
       return { success: false, error: "Invalid input data." };
     }
-    
-    const { id, status } = validationResult.data;
-    const inspectionDocRef = doc(db, "inspections", id);
-    
-    await setDoc(inspectionDocRef, { status }, { merge: true });
 
-    const updatedDoc = await getDoc(inspectionDocRef);
-    if (!updatedDoc.exists()) {
-        return { success: false, error: "Inspection not found after update." };
+    const supabaseAdmin = createAdminClient();
+    const { id, status } = validationResult.data;
+
+    const { data, error } = await supabaseAdmin
+      .from('inspections')
+      .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: error?.message || "Inspection not found after update." };
     }
-    
-    const updatedInspection = {id: updatedDoc.id, ...serializeTimestamps(updatedDoc.data())} as Inspection;
 
     revalidatePath("/inspections");
     revalidatePath("/dashboard");
-    
-    return { success: true, data: updatedInspection };
+
+    return { success: true, data: data as Inspection };
   } catch (error) {
     console.error("Failed to update inspection:", error);
     return { success: false, error: "An unexpected error occurred while updating the inspection." };
+  }
+}
+
+export async function assignInspection(inspectionId: string, assigneeName: string) {
+  try {
+    const supabaseAdmin = createAdminClient();
+    const { data, error } = await supabaseAdmin
+      .from('inspections')
+      .update({ assignedto: assigneeName, status: 'Pending' })
+      .eq('id', inspectionId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: error?.message || 'Inspection not found after assignment.' };
+    }
+
+    revalidatePath('/inspections');
+    revalidatePath('/dashboard');
+    return { success: true, data: data as Inspection };
+  } catch (error) {
+    console.error('Failed to assign inspection:', error);
+    return { success: false, error: 'An unexpected error occurred while assigning the inspection.' };
   }
 }
 
@@ -186,11 +207,11 @@ const inspectionReportSchema = z.object({
   checkType: z.string(),
   equipmentName: z.array(z.string()),
   reportNo: z.string().min(1, "Report number is required."),
-  
+
   // HT/LT Motor - TQP
   ambientTemp: z.string().optional(),
   relativeHumidity: z.string().optional(),
-  
+
   // Step 2 (HT/LT Motor)
   installation: detailedCheckSchema.optional(),
   damage: detailedCheckSchema.optional(),
@@ -263,7 +284,6 @@ const inspectionReportSchema = z.object({
   irOfBusbarsCablesWires: detailedCheckSchema.optional(),
   testingOfLightingTransformer: detailedCheckSchema.optional(),
 
-
   // Step 2 (Tundish / Busduct)
   layingOfBusduct: detailedCheckSchema.optional(),
   cleaningOfBusducts: detailedCheckSchema.optional(),
@@ -298,7 +318,7 @@ const inspectionReportSchema = z.object({
   numberingOfPoles: detailedCheckSchema.optional(),
   lanternCarriageFunction: detailedCheckSchema.optional(),
   testingOfHighMastCablesMotor: detailedCheckSchema.optional(),
-  
+
   // Step 2 (Miscellaneous Equipment)
   miscInspections: z.array(miscInspectionSchema).optional(),
 
@@ -324,21 +344,30 @@ export async function submitInspectionReport(inspectionId: string, input: Inspec
       console.error("Invalid input data:", validationResult.error.flatten());
       return { success: false, error: "Invalid input data." };
     }
-    
-    const inspectionDocRef = doc(db, "inspections", inspectionId);
 
-    // Convert date to ISO string for Firestore serialization
+    const supabaseAdmin = createAdminClient();
+
+    // Convert date to ISO string for serialization
     const reportData = {
-        ...validationResult.data,
-        inspectionDate: validationResult.data.inspectionDate.toISOString(),
+      ...validationResult.data,
+      inspectionDate: validationResult.data.inspectionDate.toISOString(),
     };
-    
-    await updateDoc(inspectionDocRef, {
-        fullReportData: reportData,
-        machineSlNo: reportData.machineSlNo,
+
+    const { error } = await supabaseAdmin
+      .from('inspections')
+      .update({
+        fullreportdata: reportData,
+        machineslno: reportData.machineSlNo,
         status: "Completed",
-        inspectedBy: reportData.inspectedBy,
-    });
+        inspectedby: reportData.inspectedBy || null,
+        completedat: new Date().toISOString(),
+      })
+      .eq('id', inspectionId);
+
+    if (error) {
+      console.error("submitInspectionReport error:", error.message);
+      return { success: false, error: error.message };
+    }
 
     revalidatePath("/dashboard");
     revalidatePath("/inspections");

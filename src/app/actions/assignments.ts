@@ -3,23 +3,8 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { createAdminClient } from "@/lib/supabase";
 import type { Inspection } from "@/lib/types";
-
-// Helper function to safely convert Firestore Timestamps to strings in nested objects
-const serializeTimestamps = (docData: any) => {
-    if (!docData) return docData;
-    const data = { ...docData };
-    for (const key in data) {
-        if (data[key] instanceof Timestamp) {
-            data[key] = data[key].toDate().toISOString();
-        } else if (data[key] && typeof data[key] === 'object' && !Array.isArray(data[key])) {
-            data[key] = serializeTimestamps(data[key]);
-        }
-    }
-    return data;
-};
 
 const assignInspectionSchema = z.object({
   inspectionId: z.string(),
@@ -34,29 +19,28 @@ export async function assignInspection(inspectionId: string, inspectorId: string
       return { success: false, error: "Invalid input data." };
     }
 
-    const inspectionDocRef = doc(db, "inspections", inspectionId);
+    const supabaseAdmin = createAdminClient();
 
-    const updatedData = { 
-      assignedTo: inspectorName,
-      status: "Pending" as const,
-    };
-    
-    await updateDoc(inspectionDocRef, updatedData);
+    const { data, error } = await supabaseAdmin
+      .from('inspections')
+      .update({
+        assignedto: inspectorName,
+        status: "Pending",
+      })
+      .eq('id', inspectionId)
+      .select()
+      .single();
 
-    const updatedDoc = await getDoc(inspectionDocRef);
-    if (!updatedDoc.exists()) {
-        return { success: false, error: "Inspection not found after update." };
+    if (error || !data) {
+      return { success: false, error: error?.message || "Inspection not found after update." };
     }
-    const updatedInspection = {id: updatedDoc.id, ...serializeTimestamps(updatedDoc.data())} as Inspection;
-    
+
     revalidatePath("/inspections");
     revalidatePath("/dashboard");
 
-    return { success: true, data: updatedInspection };
+    return { success: true, data: data as Inspection };
   } catch (error) {
     console.error("Failed to assign inspection:", error);
     return { success: false, error: "An unexpected error occurred while assigning the inspection." };
   }
 }
-
-    

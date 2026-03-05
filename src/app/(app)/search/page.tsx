@@ -11,8 +11,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { useAppContext } from '@/hooks/useAppContext';
 
 const ReportViewDialog = lazy(() => import('./report-view-dialog'));
@@ -50,38 +49,15 @@ export default function SearchPage() {
         setLoading(false);
         return;
       }
-      
       try {
-        // Fetch all inspections and extract unique machines
-        const inspectionsSnapshot = await getDocs(collection(db, "inspections"));
-        const inspectionsData = inspectionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Inspection[];
-        
+        // Fetch all inspections from Supabase
+        const { data: inspectionsData, error } = await supabase.from('inspections').select('*');
+        if (error) throw error;
         // Create unique machines from inspections
         const machineMap = new Map<string, Machine>();
-        
-        inspectionsData.forEach(inspection => {
+        (inspectionsData as Inspection[]).forEach(inspection => {
           if (inspection.machineSlNo && !machineMap.has(inspection.machineSlNo)) {
-            // Handle Firestore Timestamp
-            let lastInspectionDate = new Date().toISOString();
-            try {
-              if (inspection.createdAt) {
-                if (typeof inspection.createdAt === 'string') {
-                  lastInspectionDate = inspection.createdAt;
-                } else if (inspection.createdAt.toDate) {
-                  // Firestore Timestamp
-                  lastInspectionDate = inspection.createdAt.toDate().toISOString();
-                } else if (inspection.createdAt.seconds) {
-                  // Firestore Timestamp object
-                  lastInspectionDate = new Date(inspection.createdAt.seconds * 1000).toISOString();
-                }
-              }
-            } catch (e) {
-              console.error('Error parsing date:', e);
-            }
-            
+            let lastInspectionDate = inspection.createdAt || new Date().toISOString();
             machineMap.set(inspection.machineSlNo, {
               id: inspection.machineSlNo,
               machineId: inspection.machineSlNo,
@@ -94,7 +70,6 @@ export default function SearchPage() {
             });
           }
         });
-        
         const machinesData = Array.from(machineMap.values());
         setMachines(machinesData);
       } catch (error) {
@@ -108,7 +83,6 @@ export default function SearchPage() {
         setLoading(false);
       }
     };
-    
     fetchMachines();
   }, [user, toast]);
 
@@ -134,13 +108,13 @@ export default function SearchPage() {
     setSelectedMachine(machine);
     startTransition(async () => {
       try {
-        const q = query(collection(db, "inspections"), where("machineSlNo", "==", machine.machineId));
-        const inspectionsSnapshot = await getDocs(q);
-        const inspections = inspectionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Inspection[];
-        setInspectionHistory(inspections.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        // Fetch inspections for the selected machine from Supabase
+        const { data: inspections, error } = await supabase
+          .from('inspections')
+          .select('*')
+          .eq('machineSlNo', machine.machineId);
+        if (error) throw error;
+        setInspectionHistory((inspections as Inspection[]).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       } catch (error) {
         console.error("Error fetching inspections:", error);
         toast({

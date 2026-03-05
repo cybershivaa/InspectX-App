@@ -12,8 +12,8 @@ import { Loader2, Upload, Paperclip } from 'lucide-react';
 import type { InspectionReportFormValues } from './page';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { storage } from '@/lib/firebase';
-import { ref, uploadBytes } from 'firebase/storage';
+import { supabase } from '@/lib/supabase';
+// All Firebase storage logic replaced with Supabase Storage below
 import { Button } from '@/components/ui/button';
 
 interface SignatureFieldsProps {
@@ -88,11 +88,16 @@ export function FinalRemarksForm({ isPending }: FinalRemarksFormProps) {
         setIsUploading(true);
         setUploadedFile(file);
         try {
-            const filePath = `reports/${file.name}-${Date.now()}`;
-            const storageRef = ref(storage, filePath);
-            await uploadBytes(storageRef, file);
-            setValue('reportUrl', filePath);
-             toast({ title: 'Upload Successful', description: 'Test report has been uploaded.' });
+            const filePath = `reports/${Date.now()}_${file.name}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('inspections')
+              .upload(filePath, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: urlData } = supabase.storage.from('inspections').getPublicUrl(filePath);
+            setValue('reportUrl', urlData.publicUrl);
+            toast({ title: 'Upload Successful', description: 'Test report has been uploaded.' });
         } catch(error) {
             toast({ variant: 'destructive', title: 'Upload Failed', description: 'There was an error uploading your file.' });
         } finally {

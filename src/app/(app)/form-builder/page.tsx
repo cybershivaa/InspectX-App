@@ -1,9 +1,7 @@
-"use client";
-
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formTemplates } from "@/lib/data";
+import { getFormTemplates } from "@/app/actions/forms";
 import { PlusCircle, Edit, Trash2 } from "lucide-react";
 import {
   Table,
@@ -15,7 +13,9 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge";
 
-export default function FormBuilderPage() {
+export default async function FormBuilderPage() {
+  const formTemplates = await getFormTemplates();
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -63,9 +63,6 @@ export default function FormBuilderPage() {
                       <Link href={`/form-builder/${template.id}`}>
                         <Edit className="h-4 w-4" />
                       </Link>
-                    </Button>
-                     <Button variant="destructive" size="icon" onClick={() => alert(`Deleting ${template.name}`)}>
-                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>

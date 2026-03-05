@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -21,8 +20,7 @@ import { Pie, PieChart, ResponsiveContainer, Tooltip, Legend, Cell } from "recha
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
 import { useAppContext } from "@/hooks/useAppContext";
 import { Skeleton } from "@/components/ui/skeleton";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
 
 const statusConfig = {
   Completed: { icon: CheckCircle, color: 'text-green-500' },
@@ -32,7 +30,9 @@ const statusConfig = {
   Upcoming: { icon: Clock, color: 'text-blue-500' },
 };
 
+// Fix: Add 'Critical' to priorityVariant to match Priority type
 const priorityVariant = {
+  Critical: 'destructive',
   High: 'destructive',
   Medium: 'secondary',
   Low: 'outline',
@@ -45,29 +45,24 @@ function InspectionCard({ inspection }: { inspection: Inspection }) {
   useEffect(() => {
     const fetchPreviousInspection = async () => {
       if (!inspection.machineSlNo) return;
-      
       try {
-        const q = query(
-          collection(db, "inspections"),
-          where("machineSlNo", "==", inspection.machineSlNo),
-          where("status", "==", "Completed")
-        );
-        const snapshot = await getDocs(q);
-        
-        const previousInspections = snapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }))
+        const { data, error } = await supabase
+          .from('inspections')
+          .select('*')
+          .eq('machineSlNo', inspection.machineSlNo)
+          .eq('status', 'Completed');
+        if (error) throw error;
+        const previousInspections = (data || [])
           .filter((insp: any) => insp.id !== inspection.id)
           .sort((a: any, b: any) => {
             const dateA = a.completedAt || a.createdAt || '';
             const dateB = b.completedAt || b.createdAt || '';
             return new Date(dateB).getTime() - new Date(dateA).getTime();
           });
-        
         if (previousInspections.length > 0) {
-          const prevDate = previousInspections[0].completedAt || previousInspections[0].createdAt;
+          const prev = previousInspections[0];
+          const prevDate = (typeof prev.completedAt === 'string' ? prev.completedAt : undefined)
+            || (typeof prev.createdAt === 'string' ? prev.createdAt : undefined);
           if (prevDate) {
             setPreviousInspectionDate(prevDate);
           }
@@ -76,7 +71,6 @@ function InspectionCard({ inspection }: { inspection: Inspection }) {
         console.error("Error fetching previous inspection:", error);
       }
     };
-
     fetchPreviousInspection();
   }, [inspection.machineSlNo, inspection.id]);
 
@@ -105,10 +99,10 @@ function InspectionCard({ inspection }: { inspection: Inspection }) {
 
 const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartConfig: any}) => {
    return (
-    <ChartContainer config={chartConfig} className="min-h-[250px] w-full">
+    <ChartContainer config={chartConfig} className="w-full h-[400px]">
       {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={250}>
-          <PieChart>
+          <ResponsiveContainer width="100%" height={400}>
+          <PieChart margin={{ top: 20, right: 80, bottom: 20, left: 80 }}>
             <Tooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
             <Pie
               data={chartData}
@@ -116,8 +110,8 @@ const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartCo
               nameKey="name"
               cx="50%"
               cy="50%"
-              outerRadius={80}
-              labelLine={false}
+              outerRadius={90}
+              labelLine={true}
               label={({
                 cx,
                 cy,
@@ -128,7 +122,7 @@ const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartCo
                 index,
               }) => {
                 const RADIAN = Math.PI / 180
-                const radius = 0 + innerRadius + (outerRadius - innerRadius)
+                const radius = innerRadius + (outerRadius - innerRadius) * 1.5
                 const x = cx + radius * Math.cos(-midAngle * RADIAN)
                 const y = cy + radius * Math.sin(-midAngle * RADIAN)
 
@@ -136,7 +130,7 @@ const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartCo
                   <text
                     x={x}
                     y={y}
-                    className="fill-muted-foreground text-xs"
+                    className="fill-foreground text-sm font-semibold"
                     textAnchor={x > cx ? "start" : "end"}
                     dominantBaseline="central"
                   >
@@ -149,11 +143,14 @@ const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartCo
                 <Cell key={`cell-${index}`} fill={entry.fill} />
               ))}
             </Pie>
-            <Legend content={<ChartLegendContent />} />
+            <Legend 
+              content={<ChartLegendContent />} 
+              wrapperStyle={{ paddingTop: "20px" }}
+            />
           </PieChart>
         </ResponsiveContainer>
       ) : (
-        <div className="flex items-center justify-center h-[250px] text-muted-foreground">
+        <div className="flex items-center justify-center h-[400px] text-muted-foreground">
           No data to display
         </div>
       )}
@@ -163,56 +160,80 @@ const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartCo
 
 
 export function DashboardClientPage() {
-  const { user } = useAppContext();
+  const { user, loading: authLoading } = useAppContext();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [loading, setLoading] = useState(true);
   const [activityCount, setActivityCount] = useState(0);
   
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const fetchInspections = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      
       try {
-        const inspectionsQuery = query(collection(db, "inspections"), orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(inspectionsQuery);
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Inspection[];
-        setInspections(data);
-      } catch (error: any) {
+        const { data, error } = await supabase.from('inspections').select('*');
+        if (error) throw error;
+        // Normalize lowercase Supabase column names → camelCase
+        const normalized = ((data as any[]) || []).map((d): Inspection => ({
+          ...d,
+          machineId:      d.machineId      ?? d.machineid      ?? '',
+          machineSlNo:    d.machineSlNo    ?? d.machineslno    ?? '',
+          machineName:    d.machineName    ?? d.machinename    ?? '',
+          requestedBy:    d.requestedBy    ?? d.requestedby    ?? '',
+          assignedTo:     d.assignedTo     ?? d.assignedto     ?? undefined,
+          dueDate:        d.dueDate        ?? d.duedate        ?? '',
+          requestDate:    d.requestDate    ?? d.requestdate    ?? '',
+          createdAt:      d.createdAt      ?? d.createdat      ?? '',
+          completedAt:    d.completedAt    ?? d.completedat    ?? undefined,
+          inspectedBy:    d.inspectedBy    ?? d.inspectedby    ?? undefined,
+          fullReportData: d.fullReportData ?? d.fullreportdata ?? undefined,
+        }));
+        normalized.sort((a, b) => {
+          const dateA = new Date(a.createdAt || '').getTime();
+          const dateB = new Date(b.createdAt || '').getTime();
+          return dateB - dateA;
+        });
+        setInspections(normalized);
+      } catch (error) {
         console.error("Error loading inspections:", error);
-        if (error.code === 'permission-denied') {
-          console.error("Permission denied. User may not be authenticated properly.");
-        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchInspections();
-  }, [user]);
+
+    // Real-time subscription — update cards instantly on any INSERT/UPDATE/DELETE
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inspections' }, () => {
+        fetchInspections();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, authLoading]);
 
   // Fetch activity count for Client
   useEffect(() => {
     const fetchActivityCount = async () => {
       if (!user || user.role !== 'Client') return;
-      
       try {
-        const q = query(
-          collection(db, "activities"),
-          where("createdBy", "==", user.name)
-        );
-        const snapshot = await getDocs(q);
-        setActivityCount(snapshot.size);
+        const { count, error } = await supabase
+          .from('activities')
+          .select('*', { count: 'exact', head: true })
+          .eq('createdBy', user.name);
+        if (error) throw error;
+        setActivityCount(count || 0);
       } catch (error) {
         console.error("Error loading activity count:", error);
       }
     };
-
     fetchActivityCount();
   }, [user]);
   
@@ -375,9 +396,8 @@ export function DashboardClientPage() {
 
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 min-h-screen bg-gradient-to-br from-blue-900 to-blue-400 p-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
         {user?.role === 'Client' && (
           <Button asChild>
             <Link href="/inspections/new">
@@ -395,6 +415,29 @@ export function DashboardClientPage() {
           </Button>
         )}
       </div>
+
+      {/* Admin Panel Notification */}
+      {user?.role === 'Admin' && (
+        <Card className="border-purple-500 bg-purple-50 dark:bg-purple-950">
+          <CardHeader>
+            <CardTitle className="text-purple-900 dark:text-purple-100 flex items-center">
+              <AlertCircle className="mr-2 h-5 w-5" />
+              Admin Quick Access
+            </CardTitle>
+            <CardDescription className="text-purple-800 dark:text-purple-200">
+              For complete inspection management, user administration, and pending approvals, visit the Admin Panel.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="default" size="lg" className="w-full">
+              <Link href="/admin">
+                <ClipboardList className="mr-2 h-5 w-5" />
+                Go to Admin Panel
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Notification Alert for Client - Newly Assigned Inspections */}
       {user?.role === 'Client' && clientNotifications.length > 0 && (
@@ -544,8 +587,8 @@ export function DashboardClientPage() {
             <CardTitle>Inspection Status Overview</CardTitle>
             <CardDescription>{getChartDescription()}</CardDescription>
           </CardHeader>
-          <CardContent>
-             <Suspense fallback={<Skeleton className="h-[250px] w-full" />}>
+          <CardContent className="pb-4">
+             <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
                 <InspectionChart chartData={chartData} chartConfig={chartConfig} />
             </Suspense>
           </CardContent>

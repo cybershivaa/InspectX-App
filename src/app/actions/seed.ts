@@ -1,7 +1,7 @@
 "use server";
 
-import { db } from "@/lib/firebase";
-import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
+// TODO: Replace Firestore logic below with Supabase equivalent
 
 const mockMachines = [
   { id: 'm1', name: 'HT Motor', machineId: 'NTPC-HTM-001', status: 'Active', lastInspection: '2024-07-15', nextInspection: '2025-01-15' },
