@@ -35,7 +35,7 @@ const reportSchema = z.object({
   agencyName: z.string(),
   areaDetails: z.string(),
   unitNo: z.string(),
-  inspectionDate: z.date(),
+  inspectionDate: z.coerce.date(),
   equipmentDetails: z.string(),
   machineSlNo: z.string(),
   checkType: z.string(),
@@ -45,7 +45,7 @@ const reportSchema = z.object({
 
 const createInspectionSchema = z.object({
   machineName: z.string(),
-  priority: z.enum(["Low", "Medium", "High"]),
+  priority: z.enum(["Low", "Medium", "High", "Critical"]),
   notes: z.string().optional(),
   fullReport: reportSchema.optional(),
   machineSlNo: z.string(),

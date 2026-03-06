@@ -21,8 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Combobox } from '@/components/ui/combobox';
-import { supabase } from '@/lib/supabase';
-// All Firebase Firestore logic replaced with Supabase below
+import { createInspectionCall } from '@/app/actions/inspections';
 import Image from 'next/image';
 
 const equipmentNames = [
@@ -140,39 +139,40 @@ export function NewInspectionForm() {
       try {
         const selectedMachine = machineOptions.find(m => m.value === values.machineSlNo);
         const machineName = selectedMachine ? selectedMachine.label.split(' (')[0] : 'N/A';
-        
-        const { error: insertError } = await supabase
-          .from('inspections')
-          .insert({
-            machineid: values.reportNo || `rep-${Date.now()}`,
-            machineslno: values.machineSlNo,
-            machinename: machineName,
-            priority: values.priority,
-            status: 'Upcoming',
-            requestedby: user.name,
-            requestdate: new Date().toISOString().split('T')[0],
-            duedate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            notes: values.equipmentDetails,
-            fullreportdata: {
-              ...values,
-              inspectionDate: values.inspectionDate.toISOString(),
-            },
-            createdat: new Date().toISOString(),
-          });
 
-        if (insertError) throw insertError;
+        const result = await createInspectionCall({
+          machineName,
+          machineSlNo: values.machineSlNo,
+          priority: values.priority,
+          notes: values.equipmentDetails,
+          fullReport: {
+            agencyName: values.agencyName,
+            areaDetails: values.areaDetails,
+            unitNo: values.unitNo,
+            inspectionDate: values.inspectionDate,
+            equipmentDetails: values.equipmentDetails,
+            machineSlNo: values.machineSlNo,
+            checkType: values.checkType,
+            equipmentName: values.equipmentName,
+            reportNo: values.reportNo,
+          },
+        }, user.name);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to create inspection.');
+        }
 
         toast({
           title: "Inspection Call Created",
           description: "Your inspection call has been successfully created.",
         });
         router.push('/inspections');
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to create inspection:", error);
         toast({
           variant: "destructive",
           title: "Creation Failed",
-          description: "An unexpected error occurred while creating the inspection call.",
+          description: error?.message || "An unexpected error occurred while creating the inspection call.",
         });
       }
     });
