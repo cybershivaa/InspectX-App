@@ -74,6 +74,13 @@ function InspectionsClientPageComponent() {
         ]);
         if (inspError) throw inspError;
 
+        // If server action returned empty, try client-side fetch for users
+        let finalUsersData = usersData;
+        if (finalUsersData.length === 0) {
+          const { data: clientUsers } = await supabase.from('users').select('*');
+          if (clientUsers && clientUsers.length > 0) finalUsersData = clientUsers as User[];
+        }
+
         // Normalize column names (support both camelCase Firestore style and lowercase Supabase style)
         const normalized = (inspData || []).map((d: any): Inspection => ({
           ...d,
@@ -91,7 +98,7 @@ function InspectionsClientPageComponent() {
         }));
         setInspections(normalized);
 
-        const assignableUsers = usersData.filter((u: User) => u.role === 'Inspector' || u.role === 'Client');
+        const assignableUsers = finalUsersData.filter((u: User) => u.role === 'Inspector' || u.role === 'Client');
         setInspectors(assignableUsers);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -254,6 +261,88 @@ function InspectionsClientPageComponent() {
     router.push(`/inspections/report?inspectionId=${inspectionId}`);
   };
 
+  const renderInspectionActions = (inspection: Inspection) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="icon" variant="ghost" disabled={isPending} className="h-8 w-8">
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {user.role === 'Admin' && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <UserIcon className="mr-2 h-4 w-4" />
+              {inspection.assignedTo ? 'Reassign User' : 'Assign User'}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {inspectors.length > 0 ? (
+                inspectors.map(inspector => (
+                  <DropdownMenuItem key={inspector.id} onClick={() => handleAssign(inspection.id, inspector.id, inspector.name)}>
+                    {inspector.name} <Badge variant="outline" className="ml-2">{inspector.role}</Badge>
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled>No users available</DropdownMenuItem>
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+        {user.role === 'Admin' && inspection.assignedTo && inspection.status !== 'Completed' && (
+          <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
+            <Play className="mr-2 h-4 w-4" />
+            Start Inspection
+          </DropdownMenuItem>
+        )}
+        {user.role === 'Inspector' && !inspection.assignedTo && (
+          <DropdownMenuItem onClick={() => handleTakeInspection(inspection.id)}>
+            <UserIcon className="mr-2 h-4 w-4" />
+            Take Inspection
+          </DropdownMenuItem>
+        )}
+        {user.role === 'Inspector' && inspection.assignedTo === user.name && ['Pending', 'Upcoming'].includes(inspection.status) && (
+          <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
+            <Play className="mr-2 h-4 w-4" />
+            Start / Complete Inspection
+          </DropdownMenuItem>
+        )}
+        {inspection.status === 'Completed' && (
+          <>
+            <DropdownMenuItem onClick={() => handleViewReport(inspection.id)}>
+              <FileSearch className="mr-2 h-4 w-4" />
+              View Report
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => handleDownloadReport(inspection.id)}>
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+            </DropdownMenuItem>
+          </>
+        )}
+        {user.role === 'Admin' && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Update Status</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {(Object.keys(statusConfig) as (keyof typeof statusConfig)[]).map(s => {
+                  const sc = statusConfig[s];
+                  return (
+                    <DropdownMenuItem key={s} onClick={() => handleStatusUpdate(inspection.id, s)}>
+                      <sc.icon className={`mr-2 h-4 w-4 ${sc.color}`} />
+                      {s}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const getTitle = () => {
     switch (user.role) {
       case 'Admin': return "All Inspection Calls";
@@ -300,7 +389,7 @@ function InspectionsClientPageComponent() {
                 <TabsTrigger value="Upcoming">Upcoming</TabsTrigger>
             </TabsList>
         </Tabs>
-        <div className="table-responsive">
+        <div className="table-responsive hidden sm:block">
         <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
@@ -343,95 +432,7 @@ function InspectionsClientPageComponent() {
                     </TableCell>
                     <TableCell>{inspection.dueDate}</TableCell>
                     <TableCell className="text-right">
-                       <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="icon" variant="ghost" disabled={isPending}>
-                              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-
-                            {/* ── ADMIN OPTIONS ── */}
-                            {user.role === 'Admin' && (
-                              <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                  <UserIcon className="mr-2 h-4 w-4" />
-                                  {inspection.assignedTo ? 'Reassign User' : 'Assign User'}
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
-                                  {inspectors.length > 0 ? (
-                                    inspectors.map(inspector => (
-                                      <DropdownMenuItem key={inspector.id} onClick={() => handleAssign(inspection.id, inspector.id, inspector.name)}>
-                                        {inspector.name} <Badge variant="outline" className="ml-2">{inspector.role}</Badge>
-                                      </DropdownMenuItem>
-                                    ))
-                                  ) : (
-                                    <DropdownMenuItem disabled>No users available</DropdownMenuItem>
-                                  )}
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                            )}
-
-                            {user.role === 'Admin' && inspection.assignedTo && inspection.status !== 'Completed' && (
-                              <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
-                                <Play className="mr-2 h-4 w-4" />
-                                Start Inspection
-                              </DropdownMenuItem>
-                            )}
-
-                            {/* ── INSPECTOR OPTIONS ── */}
-                            {user.role === 'Inspector' && !inspection.assignedTo && (
-                              <DropdownMenuItem onClick={() => handleTakeInspection(inspection.id)}>
-                                <UserIcon className="mr-2 h-4 w-4" />
-                                Take Inspection
-                              </DropdownMenuItem>
-                            )}
-
-                            {user.role === 'Inspector' && inspection.assignedTo === user.name && ['Pending', 'Upcoming'].includes(inspection.status) && (
-                              <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
-                                <Play className="mr-2 h-4 w-4" />
-                                Start / Complete Inspection
-                              </DropdownMenuItem>
-                            )}
-
-                            {/* ── COMPLETED REPORT OPTIONS ── */}
-                            {inspection.status === 'Completed' && (
-                              <>
-                                <DropdownMenuItem onClick={() => handleViewReport(inspection.id)}>
-                                  <FileSearch className="mr-2 h-4 w-4" />
-                                  View Report
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDownloadReport(inspection.id)}>
-                                  <Download className="mr-2 h-4 w-4" />
-                                  Download PDF
-                                </DropdownMenuItem>
-                              </>
-                            )}
-
-                            {/* ── ADMIN STATUS UPDATE ── */}
-                            {user.role === 'Admin' && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuSub>
-                                  <DropdownMenuSubTrigger>Update Status</DropdownMenuSubTrigger>
-                                  <DropdownMenuSubContent>
-                                    {(Object.keys(statusConfig) as (keyof typeof statusConfig)[]).map(s => {
-                                      const sc = statusConfig[s];
-                                      return (
-                                        <DropdownMenuItem key={s} onClick={() => handleStatusUpdate(inspection.id, s)}>
-                                          <sc.icon className={`mr-2 h-4 w-4 ${sc.color}`} />
-                                          {s}
-                                        </DropdownMenuItem>
-                                      );
-                                    })}
-                                  </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-                              </>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                       {renderInspectionActions(inspection)}
                     </TableCell>
                   </TableRow>
                 );
@@ -445,6 +446,59 @@ function InspectionsClientPageComponent() {
             )}
           </TableBody>
         </Table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="sm:hidden space-y-3">
+          {displayedInspections.length > 0 ? (
+            displayedInspections.map((inspection: Inspection) => {
+              const config = statusConfig[inspection.status];
+              return (
+                <div key={inspection.id} className="border rounded-xl p-4 space-y-3 bg-card">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm truncate">{inspection.machineName}</p>
+                      {(['Client', 'Inspector'] as string[]).includes(user.role) && inspection.assignedTo === user.name && (
+                        <Badge variant="secondary" className="mt-1 text-[10px]">Assigned to You</Badge>
+                      )}
+                    </div>
+                    {renderInspectionActions(inspection)}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">Requested:</span>
+                      <p className="font-medium truncate">{inspection.requestedBy}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Assigned:</span>
+                      <p className="font-medium truncate">{inspection.assignedTo || 'Unassigned'}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Due:</span>
+                      <p className="font-medium">{inspection.dueDate || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Priority:</span>
+                      <Badge 
+                        variant={priorityConfig[inspection.priority as keyof typeof priorityConfig]?.variant || 'outline'}
+                        className="font-semibold text-[10px] mt-0.5"
+                      >
+                        {priorityConfig[inspection.priority as keyof typeof priorityConfig]?.icon} {inspection.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 border-t">
+                    <config.icon className={`h-3.5 w-3.5 ${config.color}`} />
+                    <span className="text-xs font-medium">{inspection.status}</span>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-12 text-muted-foreground text-sm">
+              {user.role === 'Client' ? "You have not raised any inspection calls." : user.role === 'Inspector' ? "You have no assigned inspections." : "No inspection calls found."}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

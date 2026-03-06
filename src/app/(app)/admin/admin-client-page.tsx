@@ -288,30 +288,56 @@ export function AdminClientPage() {
   const { toast } = useToast();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  /* ── Fetchers ── */
+  /* ── Fetchers (with client-side fallback) ── */
   const fetchUsers = async () => {
     try {
-      const usersData = await getUsers();
+      let usersData = await getUsers();
+      // Fallback: if server action returned empty, try client-side fetch
+      if (usersData.length === 0) {
+        const { data } = await supabase.from('users').select('*');
+        if (data && data.length > 0) usersData = data as User[];
+      }
       setUsers(usersData.sort((a, b) => a.name.localeCompare(b.name)));
       setUsersLoaded(true);
     } catch (error) {
       console.error("Error fetching users:", error);
+      // Last resort: try client-side
+      try {
+        const { data } = await supabase.from('users').select('*');
+        if (data) setUsers((data as User[]).sort((a, b) => a.name.localeCompare(b.name)));
+        setUsersLoaded(true);
+      } catch {}
     }
   };
 
   const fetchPendingUsers = async () => {
     try {
-      const pendingData = await getPendingUsers();
+      let pendingData = await getPendingUsers();
+      // Fallback: if server action returned empty, try client-side fetch
+      if (pendingData.length === 0) {
+        const { data } = await supabase.from('pending_users').select('*');
+        if (data && data.length > 0) pendingData = data as PendingUser[];
+      }
       setPendingUsers(pendingData);
       setPendingLoaded(true);
     } catch (error) {
       console.error("Error fetching pending users:", error);
+      try {
+        const { data } = await supabase.from('pending_users').select('*');
+        if (data) setPendingUsers(data as PendingUser[]);
+        setPendingLoaded(true);
+      } catch {}
     }
   };
 
   const fetchInspections = async () => {
     try {
-      const inspectionsData = await getInspections();
+      let inspectionsData = await getInspections();
+      // Fallback: if server action returned empty, try client-side fetch
+      if (inspectionsData.length === 0) {
+        const { data } = await supabase.from('inspections').select('*').order('createdat', { ascending: false });
+        if (data && data.length > 0) inspectionsData = data as Inspection[];
+      }
       const sorted = inspectionsData.sort((a, b) => {
         const dateA = new Date(
           (a as any).createdat || (a as any).createdAt || ""
@@ -325,16 +351,31 @@ export function AdminClientPage() {
       setInspectionsLoaded(true);
     } catch (error) {
       console.error("Error fetching inspections:", error);
+      try {
+        const { data } = await supabase.from('inspections').select('*').order('createdat', { ascending: false });
+        if (data) setCompletedInspections(data as Inspection[]);
+        setInspectionsLoaded(true);
+      } catch {}
     }
   };
 
   const fetchActivityLogs = async () => {
     try {
-      const logs = await getActivityLogs(200);
+      let logs = await getActivityLogs(200);
+      // Fallback: if server action returned empty, try client-side fetch
+      if (logs.length === 0) {
+        const { data } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(200);
+        if (data && data.length > 0) logs = data as ActivityLog[];
+      }
       setActivityLogs(logs);
       setActivityLogsLoaded(true);
     } catch (error) {
       console.error("Error fetching activity logs:", error);
+      try {
+        const { data } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(200);
+        if (data) setActivityLogs(data as ActivityLog[]);
+        setActivityLogsLoaded(true);
+      } catch {}
     }
   };
 

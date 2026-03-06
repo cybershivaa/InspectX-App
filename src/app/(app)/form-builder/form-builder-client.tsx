@@ -93,7 +93,8 @@ export function FormBuilderClient({ templates, machines }: Props) {
 
   return (
     <>
-      <div className="table-responsive">
+      {/* Desktop Table View */}
+      <div className="table-responsive hidden sm:block">
       <Table className="min-w-[600px]">
         <TableHeader>
           <TableRow>
@@ -178,6 +179,78 @@ export function FormBuilderClient({ templates, machines }: Props) {
           )}
         </TableBody>
       </Table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="sm:hidden space-y-3">
+        {templates.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            No form templates yet. Click "Create Template" to get started.
+          </div>
+        ) : (
+          templates.map(template => {
+            const assignedCount = template.assignedMachineIds?.length || 0;
+            const assignedNames = (template.assignedMachineIds || [])
+              .map(id => machines.find(m => m.id === id)?.name)
+              .filter(Boolean);
+
+            return (
+              <div key={template.id} className="border rounded-xl p-4 space-y-3 bg-card">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm">{template.name}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      {template.description || 'No description'}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 text-xs">{template.fields.length} fields</Badge>
+                </div>
+                {assignedCount > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {assignedNames.slice(0, 3).map(name => (
+                      <Badge key={name} variant="outline" className="text-[10px] gap-1">
+                        <Monitor className="h-2.5 w-2.5" />
+                        {name}
+                      </Badge>
+                    ))}
+                    {assignedNames.length > 3 && (
+                      <Badge variant="outline" className="text-[10px]">
+                        +{assignedNames.length - 3} more
+                      </Badge>
+                    )}
+                  </div>
+                )}
+                {assignedCount === 0 && (
+                  <p className="text-[10px] text-muted-foreground italic">Not assigned to any machines</p>
+                )}
+                <div className="flex items-center gap-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1.5 text-xs h-8"
+                    onClick={() => openAssignDialog(template)}
+                  >
+                    <Monitor className="h-3 w-3" />
+                    Assign
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8 px-3" asChild>
+                    <Link href={`/form-builder/${template.id}`}>
+                      <Edit className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => openDeleteDialog(template)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Assign to Machine Dialog */}
