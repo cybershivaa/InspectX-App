@@ -212,6 +212,220 @@ function ApproveUserDialog({
 
 
 /* ───────────────────────────────────────────────────────────────────
+   Add User Dialog – Admin can directly create users with any role
+   ─────────────────────────────────────────────────────────────────── */
+function AddUserDialog({
+  isOpen,
+  onOpenChange,
+  onUserAdded,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUserAdded: (newUser: User) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
+  const { user: currentUser } = useAppContext();
+
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "Inspector" as Role,
+  });
+  const [showPassword, setShowPassword] = useState(false);
+
+  const generatePassword = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789@#$!";
+    let pass = "";
+    for (let i = 0; i < 12; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setFormData((prev) => ({ ...prev, password: pass }));
+    setShowPassword(true);
+  };
+
+  const resetForm = () => {
+    setFormData({ name: "", email: "", password: "", role: "Inspector" });
+    setShowPassword(false);
+  };
+
+  const handleSubmit = () => {
+    if (!formData.name.trim()) {
+      toast({ variant: "destructive", title: "Error", description: "Employee name is required." });
+      return;
+    }
+    if (!formData.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast({ variant: "destructive", title: "Error", description: "A valid email address is required." });
+      return;
+    }
+    if (!formData.password || formData.password.length < 8) {
+      toast({ variant: "destructive", title: "Error", description: "Password must be at least 8 characters." });
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/approve-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email.trim(),
+            password: formData.password,
+            name: formData.name.trim(),
+            role: formData.role,
+          }),
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+          toast({
+            variant: "destructive",
+            title: "Failed to Create User",
+            description: result.error || "An error occurred.",
+          });
+          return;
+        }
+
+        const newUser: User = {
+          id: result.user?.id || "",
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          role: formData.role,
+          avatar: "",
+        };
+
+        toast({
+          title: "User Created Successfully",
+          description: `Account created for ${formData.name} (${formData.role}).`,
+        });
+
+        // Log the action
+        createActivityLog({
+          action: "USER_CREATED",
+          entity_type: "user",
+          entity_id: newUser.id,
+          entity_name: newUser.name,
+          details: `${newUser.name} (${newUser.email}) was created as ${newUser.role} by admin`,
+          performed_by: currentUser?.name || "Admin",
+          performed_by_role: "Admin",
+        });
+
+        onUserAdded(newUser);
+        resetForm();
+        onOpenChange(false);
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Failed to Create User",
+          description: error.message || "An unexpected error occurred.",
+        });
+      }
+    });
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetForm(); onOpenChange(open); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-blue-600" />
+            Add New User
+          </DialogTitle>
+          <DialogDescription>
+            Create a new user account with a specific role. The user will be able to login immediately.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          {/* Name */}
+          <div className="space-y-2">
+            <Label htmlFor="add-user-name" className="text-sm font-medium">Employee Name</Label>
+            <Input
+              id="add-user-name"
+              placeholder="e.g. Rahul Sharma"
+              value={formData.name}
+              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+              className="h-10"
+            />
+          </div>
+
+          {/* Email */}
+          <div className="space-y-2">
+            <Label htmlFor="add-user-email" className="text-sm font-medium">Email Address</Label>
+            <Input
+              id="add-user-email"
+              type="email"
+              placeholder="e.g. rahul@company.com"
+              value={formData.email}
+              onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+              className="h-10"
+            />
+          </div>
+
+          {/* Password */}
+          <div className="space-y-2">
+            <Label htmlFor="add-user-password" className="text-sm font-medium">Password</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="add-user-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Min 8 characters"
+                  value={formData.password}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
+                  className="h-10 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <X className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="h-10 text-xs whitespace-nowrap" onClick={generatePassword}>
+                Generate
+              </Button>
+            </div>
+            {formData.password && showPassword && (
+              <p className="text-[11px] text-muted-foreground bg-muted/60 px-2 py-1.5 rounded-md font-mono select-all break-all">
+                {formData.password}
+              </p>
+            )}
+          </div>
+
+          {/* Role */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Role</Label>
+            <Select value={formData.role} onValueChange={(v) => setFormData((prev) => ({ ...prev, role: v as Role }))}>
+              <SelectTrigger className="h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Admin">Admin</SelectItem>
+                <SelectItem value="Inspector">Inspector</SelectItem>
+                <SelectItem value="Client">Client</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={isPending} className="gap-2">
+            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Create User
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+/* ───────────────────────────────────────────────────────────────────
    Stats Card
    ─────────────────────────────────────────────────────────────────── */
 function StatsCard({
@@ -285,6 +499,7 @@ export function AdminClientPage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [activityLogsLoaded, setActivityLogsLoaded] = useState(false);
   const [activitySearch, setActivitySearch] = useState("");
+  const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false);
   const { toast } = useToast();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -1142,7 +1357,7 @@ export function AdminClientPage() {
                       {stats.clients} Client
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <div className="relative flex-1 sm:flex-none">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -1152,6 +1367,14 @@ export function AdminClientPage() {
                         onChange={(e) => setUserSearch(e.target.value)}
                       />
                     </div>
+                    <Button
+                      size="sm"
+                      className="rounded-lg gap-1.5 text-xs"
+                      onClick={() => setIsAddUserDialogOpen(true)}
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      Add User
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -1893,6 +2116,15 @@ export function AdminClientPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add User Dialog */}
+      <AddUserDialog
+        isOpen={isAddUserDialogOpen}
+        onOpenChange={setIsAddUserDialogOpen}
+        onUserAdded={(newUser) => {
+          setUsers((prev) => [...prev, newUser].sort((a, b) => a.name.localeCompare(b.name)));
+        }}
+      />
     </>
   );
 }
