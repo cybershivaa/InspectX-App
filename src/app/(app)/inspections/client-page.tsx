@@ -67,7 +67,11 @@ function InspectionsClientPageComponent() {
       }
       
         try {
-        const { data: inspData, error: inspError } = await supabase.from('inspections').select('*');
+        // Run both fetches in parallel to cut load time in half
+        const [{ data: inspData, error: inspError }, usersData] = await Promise.all([
+          supabase.from('inspections').select('*'),
+          getUsers(),
+        ]);
         if (inspError) throw inspError;
 
         // Normalize column names (support both camelCase Firestore style and lowercase Supabase style)
@@ -87,8 +91,6 @@ function InspectionsClientPageComponent() {
         }));
         setInspections(normalized);
 
-        // Use server action (service role) to bypass RLS and fetch all users
-        const usersData = await getUsers();
         const assignableUsers = usersData.filter((u: User) => u.role === 'Inspector' || u.role === 'Client');
         setInspectors(assignableUsers);
       } catch (error) {
@@ -255,8 +257,8 @@ function InspectionsClientPageComponent() {
   const getTitle = () => {
     switch (user.role) {
       case 'Admin': return "All Inspection Calls";
-      case 'Client': return "My Inspection Calls";
-      case 'Inspector': return "My Assigned Inspections";
+      case 'Client': return "My Raised Calls";
+      case 'Inspector': return "Assigned Inspections";
       default: return "Inspections";
     }
   }
@@ -264,8 +266,8 @@ function InspectionsClientPageComponent() {
   const getDescription = () => {
      switch (user.role) {
       case 'Admin': return "Track and manage all inspection calls across the system.";
-      case 'Client': return "Track the progress and reports of your raised inspection calls.";
-      case 'Inspector': return "Manage your assigned inspections and file reports.";
+      case 'Client': return "View and track all inspection calls you have raised.";
+      case 'Inspector': return "Complete your assigned inspections and submit reports.";
       default: return "";
     }
   }
@@ -283,7 +285,7 @@ function InspectionsClientPageComponent() {
             <Button asChild>
               <a href="/inspections/new">
                 <FilePlus className="mr-2 h-4 w-4" />
-                Add New Inspection
+                Raise Inspection Call
               </a>
             </Button>
           )}
@@ -386,10 +388,10 @@ function InspectionsClientPageComponent() {
                               </DropdownMenuItem>
                             )}
 
-                            {(user.role === 'Inspector' || user.role === 'Client') && inspection.assignedTo === user.name && ['Pending', 'Upcoming'].includes(inspection.status) && (
+                            {user.role === 'Inspector' && inspection.assignedTo === user.name && ['Pending', 'Upcoming'].includes(inspection.status) && (
                               <DropdownMenuItem onClick={() => handleStartInspection(inspection.id)}>
                                 <Play className="mr-2 h-4 w-4" />
-                                Start Inspection
+                                Start / Complete Inspection
                               </DropdownMenuItem>
                             )}
 

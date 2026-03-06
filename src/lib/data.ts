@@ -81,10 +81,10 @@ export let formTemplates: FormTemplate[] = [
     name: 'Standard Equipment Inspection',
     description: 'A general-purpose inspection form for standard equipment checks.',
     fields: [
-      { id: 'f1', label: 'Visual Inspection', type: 'select', options: ['Pass', 'Fail', 'N/A'] },
-      { id: 'f2', label: 'Temperature (°C)', type: 'number' },
-      { id: 'f3', label: 'Pressure (PSI)', type: 'number' },
-      { id: 'f4', label: 'Inspector Notes', type: 'textarea' },
+      { id: 'f1', label: 'Visual Inspection', type: 'dropdown', required: true, options: ['Pass', 'Fail', 'N/A'] },
+      { id: 'f2', label: 'Temperature (°C)', type: 'text', required: false },
+      { id: 'f3', label: 'Pressure (PSI)', type: 'text', required: false },
+      { id: 'f4', label: 'Inspector Notes', type: 'text', required: false },
     ]
   }
 ];

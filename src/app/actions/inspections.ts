@@ -5,6 +5,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase";
 import type { Inspection } from "@/lib/types";
+import { createNotificationForRole, createNotification } from "@/app/actions/notifications";
+import { createActivityLog } from "@/app/actions/activity-logs";
 
 
 export async function getInspectionById(id: string) {
@@ -93,6 +95,26 @@ export async function createInspectionCall(input: CreateInspectionInput, request
     revalidatePath("/dashboard");
     revalidatePath("/inspections");
 
+    // Notify all Admins about the new inspection call
+    await createNotificationForRole({
+      title: "New Inspection Call",
+      message: "New inspection call for " + machineName + " created by " + requestedBy,
+      role: "Admin",
+      type: "NEW_INSPECTION_CALL",
+      reference_id: data.id,
+    });
+
+    // Log activity
+    await createActivityLog({
+      action: "INSPECTION_CREATED",
+      entity_type: "inspection",
+      entity_id: data.id,
+      entity_name: machineName,
+      details: "Inspection call created for " + machineName + " with priority " + priority,
+      performed_by: requestedBy,
+      performed_by_role: "Client",
+    });
+
     return { success: true, data: data as Inspection };
   } catch (error) {
     console.error("Failed to create inspection call:", error);
@@ -131,6 +153,18 @@ export async function updateInspection(input: UpdateInspectionInput) {
     revalidatePath("/inspections");
     revalidatePath("/dashboard");
 
+    // Log status change
+    const updatedMachineName = (data as any).machinename || (data as any).machineName || "Unknown";
+    await createActivityLog({
+      action: "INSPECTION_STATUS_UPDATED",
+      entity_type: "inspection",
+      entity_id: id,
+      entity_name: updatedMachineName,
+      details: "Inspection status changed to " + status,
+      performed_by: "System",
+      performed_by_role: "System",
+    });
+
     return { success: true, data: data as Inspection };
   } catch (error) {
     console.error("Failed to update inspection:", error);
@@ -154,6 +188,37 @@ export async function assignInspection(inspectionId: string, assigneeName: strin
 
     revalidatePath('/inspections');
     revalidatePath('/dashboard');
+
+    // Find the assigned user and notify them
+    const { data: assignedUser } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('name', assigneeName)
+      .single();
+
+    if (assignedUser) {
+      const machineName = (data as any).machinename || (data as any).machineName || 'An inspection';
+      await createNotification({
+        title: "Inspection Assigned to You",
+        message: "You have been assigned to inspect " + machineName,
+        user_id: assignedUser.id,
+        type: "INSPECTION_ASSIGNED",
+        reference_id: inspectionId,
+      });
+    }
+
+    // Log activity
+    const inspMachineName = (data as any).machinename || (data as any).machineName || 'Unknown';
+    await createActivityLog({
+      action: "INSPECTION_ASSIGNED",
+      entity_type: "inspection",
+      entity_id: inspectionId,
+      entity_name: inspMachineName,
+      details: "Inspection assigned to " + assigneeName,
+      performed_by: "Admin",
+      performed_by_role: "Admin",
+    });
+
     return { success: true, data: data as Inspection };
   } catch (error) {
     console.error('Failed to assign inspection:', error);
@@ -371,6 +436,27 @@ export async function submitInspectionReport(inspectionId: string, input: Inspec
 
     revalidatePath("/dashboard");
     revalidatePath("/inspections");
+
+    // Notify all Admins that inspection is completed
+    const machineName = reportData.equipmentDetails || "An inspection";
+    await createNotificationForRole({
+      title: "Inspection Completed",
+      message: "Inspection completed and waiting for approval - " + machineName,
+      role: "Admin",
+      type: "INSPECTION_COMPLETED",
+      reference_id: inspectionId,
+    });
+
+    // Log activity
+    await createActivityLog({
+      action: "INSPECTION_COMPLETED",
+      entity_type: "inspection",
+      entity_id: inspectionId,
+      entity_name: reportData.machineSlNo || machineName,
+      details: "Inspection report submitted by " + (reportData.inspectedBy || "Inspector") + " for " + machineName,
+      performed_by: reportData.inspectedBy || "Inspector",
+      performed_by_role: "Inspector",
+    });
 
     return { success: true };
   } catch (error) {

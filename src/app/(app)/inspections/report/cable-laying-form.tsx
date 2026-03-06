@@ -12,7 +12,7 @@ import { Loader2, Upload, Paperclip } from 'lucide-react';
 import type { InspectionReportFormValues } from './page';
 
 interface ChecklistItemProps {
-    name: keyof InspectionReportFormValues;
+    name: string;
     title: string;
     acceptanceCriteria: React.ReactNode;
 }
@@ -40,14 +40,14 @@ function ChecklistItem({ name, title, acceptanceCriteria }: ChecklistItemProps) 
                 <div className="space-y-4">
                     <FormField
                         control={control}
-                        name={`${name}.result`}
+                        name={`${name}.result` as any}
                         render={({ field }) => (
                             <FormItem className="space-y-3">
                                 <FormLabel>Actual Condition/Result<span className="text-red-500">*</span></FormLabel>
                                 <FormControl>
                                     <RadioGroup
                                         onValueChange={field.onChange}
-                                        defaultValue={field.value}
+                                        defaultValue={field.value as string}
                                         className="flex items-center gap-4"
                                     >
                                         <FormItem className="flex items-center space-x-2 space-y-0">
@@ -70,11 +70,11 @@ function ChecklistItem({ name, title, acceptanceCriteria }: ChecklistItemProps) 
                     />
                     <FormField
                         control={control}
-                        name={`${name}.remarks`}
+                        name={`${name}.remarks` as any}
                         render={({ field }) => (
                             <FormItem>
                                 <FormControl>
-                                    <Input placeholder="Enter remarks if 'Not OK'" {...field} value={field.value ?? ''} />
+                                    <Input placeholder="Enter remarks if 'Not OK'" {...field} value={String(field.value ?? '')} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>

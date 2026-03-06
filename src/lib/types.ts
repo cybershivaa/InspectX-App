@@ -70,13 +70,15 @@ export interface Anomaly {
   inspectionId?: string; // Link to the inspection for detailed view
 }
 
-export type FormFieldType = 'text' | 'number' | 'select' | 'textarea' | 'checkbox';
+export type FormFieldType = 'text' | 'dropdown' | 'date' | 'yesno' | 'pdf' | 'photo';
 
 export interface FormField {
   id: string;
   label: string;
   type: FormFieldType;
-  options?: string[]; // For select type
+  required: boolean;
+  options?: string[]; // For dropdown type
+  placeholder?: string;
 }
 
 export interface FormTemplate {
@@ -84,6 +86,7 @@ export interface FormTemplate {
   name: string;
   description: string;
   fields: FormField[];
+  assignedMachineIds?: string[]; // Machines this form template is assigned to
 }
 
     

@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useTransition, useEffect } from 'react';
+import React, { useState, useTransition, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { detectAnomalies } from '@/app/actions/ai';
-import { inspectionDataForAI } from '@/lib/data';
 import type { Anomaly, Inspection } from '@/lib/types';
 import { AlertTriangle, Bot, Loader2, Sparkles, RefreshCw, Filter, TrendingUp, AlertCircle, Eye, Calendar, User, Clock, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -29,45 +28,10 @@ export default function AnomalyDetectionPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  // Fetch real inspections from Supabase
-  useEffect(() => {
-    const fetchInspections = async () => {
-      try {
-        const { data, error } = await supabase.from('inspections').select('*');
-        if (error) throw error;
-
-        // Normalize column names (support both camelCase and lowercase)
-        const normalized = (data || []).map((d: any): Inspection => ({
-          ...d,
-          machineId: d.machineId ?? d.machineid ?? '',
-          machineName: d.machineName ?? d.machinename ?? '',
-          requestedBy: d.requestedBy ?? d.requestedby ?? '',
-          assignedTo: d.assignedTo ?? d.assignedto ?? undefined,
-          dueDate: d.dueDate ?? d.duedate ?? '',
-          requestDate: d.requestDate ?? d.requestdate ?? '',
-          createdAt: d.createdAt ?? d.createdat ?? '',
-        }));
-        setInspections(normalized);
-      } catch (error) {
-        console.error('Error fetching inspections:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Failed to load inspection data.'
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInspections();
-  }, [toast]);
-
-  // Rule-based anomaly detection (fallback)
-  const detectAnomaliesRuleBased = (data: Inspection[]): Anomaly[] => {
+  // Rule-based anomaly detection helper (defined before useEffect so it can be called inside)
+  const detectAnomaliesRuleBasedFn = useCallback((data: Inspection[]): Anomaly[] => {
     const detectedAnomalies: Anomaly[] = [];
-    
     data.forEach(inspection => {
-      // Check for failed or partial inspections
       if (inspection.status === 'Failed' || inspection.status === 'Partial') {
         detectedAnomalies.push({
           machineId: inspection.machineName || inspection.machineId,
@@ -76,8 +40,6 @@ export default function AnomalyDetectionPage() {
           inspectionId: inspection.id
         });
       }
-      
-      // Check for overdue inspections
       const dueDate = new Date(inspection.dueDate);
       const today = new Date();
       if (inspection.status === 'Pending' && dueDate < today) {
@@ -89,20 +51,50 @@ export default function AnomalyDetectionPage() {
           inspectionId: inspection.id
         });
       }
-      
-      // Check high priority pending inspections
-      if (inspection.priority === 'High' && inspection.status === 'Pending') {
+      if ((inspection.priority === 'High' || inspection.priority === 'Critical') && inspection.status === 'Pending') {
         detectedAnomalies.push({
           machineId: inspection.machineName || inspection.machineId,
           timestamp: inspection.createdAt || new Date().toISOString(),
-          message: `High priority inspection pending. Due date: ${inspection.dueDate}`,
+          message: `${inspection.priority} priority inspection pending. Due: ${inspection.dueDate}`,
           inspectionId: inspection.id
         });
       }
     });
-    
     return detectedAnomalies;
-  };
+  }, []);
+
+  // Fetch real inspections from Supabase and auto-run analysis
+  useEffect(() => {
+    const fetchInspections = async () => {
+      try {
+        const { data, error } = await supabase.from('inspections').select('*');
+        if (error) throw error;
+        const normalized = (data || []).map((d: any): Inspection => ({
+          ...d,
+          machineId: d.machineId ?? d.machineid ?? '',
+          machineName: d.machineName ?? d.machinename ?? '',
+          requestedBy: d.requestedBy ?? d.requestedby ?? '',
+          assignedTo: d.assignedTo ?? d.assignedto ?? undefined,
+          dueDate: d.dueDate ?? d.duedate ?? '',
+          requestDate: d.requestDate ?? d.requestdate ?? '',
+          createdAt: d.createdAt ?? d.createdat ?? '',
+        }));
+        setInspections(normalized);
+        // Auto-run rule-based analysis on load
+        const autoAnomalies = detectAnomaliesRuleBasedFn(normalized);
+        setAnomalies(autoAnomalies);
+      } catch (error) {
+        console.error('Error fetching inspections:', error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Failed to load inspection data.' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInspections();
+  }, [toast, detectAnomaliesRuleBasedFn]);
+
+  // Rule-based anomaly detection (wrapper for handleDetection)
+  const detectAnomaliesRuleBased = detectAnomaliesRuleBasedFn;
 
   // Handler to view inspection details
   const handleViewDetails = (anomaly: Anomaly) => {
@@ -132,8 +124,13 @@ export default function AnomalyDetectionPage() {
       }
       
       if (useAI) {
-        // Try AI-based detection
-        const result = await detectAnomalies({ inspectionData: inspectionDataForAI });
+        // Try AI-based detection using real inspection data
+        const aiPayload = dataToAnalyze.map(i => ({
+          machineId: i.machineId || i.machineName,
+          timestamp: i.createdAt || new Date().toISOString(),
+          readings: { status: i.status, priority: i.priority, dueDate: i.dueDate } as any,
+        }));
+        const result = await detectAnomalies({ inspectionData: aiPayload });
         if (result.success && result.data) {
           setAnomalies(result.data.anomalies);
           toast({

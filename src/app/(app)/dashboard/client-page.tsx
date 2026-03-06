@@ -38,41 +38,8 @@ const priorityVariant = {
   Low: 'outline',
 } as const;
 
-function InspectionCard({ inspection }: { inspection: Inspection }) {
+function InspectionCard({ inspection, previousInspectionDate }: { inspection: Inspection; previousInspectionDate?: string | null }) {
   const { icon: Icon, color } = statusConfig[inspection.status];
-  const [previousInspectionDate, setPreviousInspectionDate] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchPreviousInspection = async () => {
-      if (!inspection.machineSlNo) return;
-      try {
-        const { data, error } = await supabase
-          .from('inspections')
-          .select('*')
-          .eq('machineSlNo', inspection.machineSlNo)
-          .eq('status', 'Completed');
-        if (error) throw error;
-        const previousInspections = (data || [])
-          .filter((insp: any) => insp.id !== inspection.id)
-          .sort((a: any, b: any) => {
-            const dateA = a.completedAt || a.createdAt || '';
-            const dateB = b.completedAt || b.createdAt || '';
-            return new Date(dateB).getTime() - new Date(dateA).getTime();
-          });
-        if (previousInspections.length > 0) {
-          const prev = previousInspections[0];
-          const prevDate = (typeof prev.completedAt === 'string' ? prev.completedAt : undefined)
-            || (typeof prev.createdAt === 'string' ? prev.createdAt : undefined);
-          if (prevDate) {
-            setPreviousInspectionDate(prevDate);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching previous inspection:", error);
-      }
-    };
-    fetchPreviousInspection();
-  }, [inspection.machineSlNo, inspection.id]);
 
   return (
     <Card className="hover:shadow-lg transition-shadow duration-300">
@@ -174,7 +141,10 @@ export function DashboardClientPage() {
 
     const fetchInspections = async () => {
       try {
-        const { data, error } = await supabase.from('inspections').select('*');
+        // Exclude fullreportdata (large JSON blob not needed on dashboard)
+        const { data, error } = await supabase.from('inspections').select(
+          'id,machineid,machineslno,machinename,priority,status,requestedby,assignedto,duedate,requestdate,createdat,completedat,inspectedby,notes'
+        );
         if (error) throw error;
         // Normalize lowercase Supabase column names → camelCase
         const normalized = ((data as any[]) || []).map((d): Inspection => ({
@@ -191,11 +161,9 @@ export function DashboardClientPage() {
           inspectedBy:    d.inspectedBy    ?? d.inspectedby    ?? undefined,
           fullReportData: d.fullReportData ?? d.fullreportdata ?? undefined,
         }));
-        normalized.sort((a, b) => {
-          const dateA = new Date(a.createdAt || '').getTime();
-          const dateB = new Date(b.createdAt || '').getTime();
-          return dateB - dateA;
-        });
+        normalized.sort((a, b) =>
+          new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime()
+        );
         setInspections(normalized);
       } catch (error) {
         console.error("Error loading inspections:", error);
@@ -269,15 +237,28 @@ export function DashboardClientPage() {
   }, [userInspections, activeTab, priorityFilter]);
 
   const stats = useMemo(() => {
-    const data = userInspections; // Use all user inspections for the chart
+    const data = userInspections;
     return {
       total: data.length,
       completed: data.filter(i => i.status === 'Completed').length,
       pending: data.filter(i => i.status === 'Pending').length,
       upcoming: data.filter(i => i.status === 'Upcoming').length,
       failed: data.filter(i => i.status === 'Failed' || i.status === 'Partial').length,
-    }
+    };
   }, [userInspections]);
+
+  // Pre-compute previous completed inspection date per machine — avoids N+1 DB queries
+  const prevInspectionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const completed = inspections
+      .filter(i => i.status === 'Completed' && i.machineSlNo)
+      .sort((a, b) => new Date(b.completedAt || b.createdAt || 0).getTime() - new Date(a.completedAt || a.createdAt || 0).getTime());
+    completed.forEach(i => {
+      const key = i.machineSlNo!;
+      if (!map.has(key)) map.set(key, i.completedAt || i.createdAt || '');
+    });
+    return map;
+  }, [inspections]);
   
   const chartData = useMemo(() => [
     { name: "Completed", value: stats.completed, fill: "hsl(var(--chart-2))" },
@@ -308,18 +289,39 @@ export function DashboardClientPage() {
     },
   }
 
-  const StatCard = ({ title, value, icon: Icon, description, href }: {title: string, value: number, icon: React.ElementType, description: string, href?: string}) => {
+  const statCardThemes = {
+    total:     { bg: 'from-blue-500 to-indigo-600',   iconBg: 'bg-blue-100',   iconColor: 'text-blue-600',   valueBg: 'text-blue-700',   border: 'border-blue-100',   glow: 'hover:shadow-blue-100' },
+    completed: { bg: 'from-emerald-500 to-green-600', iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', valueBg: 'text-emerald-700', border: 'border-emerald-100', glow: 'hover:shadow-emerald-100' },
+    pending:   { bg: 'from-amber-400 to-yellow-500',  iconBg: 'bg-amber-100',  iconColor: 'text-amber-600',  valueBg: 'text-amber-700',  border: 'border-amber-100',  glow: 'hover:shadow-amber-100' },
+    alert:     { bg: 'from-rose-500 to-red-600',      iconBg: 'bg-rose-100',   iconColor: 'text-rose-600',   valueBg: 'text-rose-700',   border: 'border-rose-100',   glow: 'hover:shadow-rose-100' },
+    activity:  { bg: 'from-purple-500 to-violet-600', iconBg: 'bg-purple-100', iconColor: 'text-purple-600', valueBg: 'text-purple-700', border: 'border-purple-100', glow: 'hover:shadow-purple-100' },
+  };
+
+  const StatCard = ({ title, value, icon: Icon, description, href, theme }: {title: string, value: number, icon: React.ElementType, description: string, href?: string, theme: keyof typeof statCardThemes}) => {
+    const t = statCardThemes[theme];
     const CardComponent = (
-        <Card className={href ? "hover:bg-accent/50 transition-colors" : ""}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{value}</div>
-                <p className="text-xs text-muted-foreground">{description}</p>
-            </CardContent>
-        </Card>
+      <div className={`relative rounded-2xl border ${t.border} bg-white shadow-sm hover:shadow-lg ${t.glow} transition-all duration-300 overflow-hidden group ${href ? 'cursor-pointer' : ''}`}>
+        {/* Top gradient accent bar */}
+        <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${t.bg}`} />
+        <div className="p-5">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">{title}</p>
+              <p className={`text-3xl font-extrabold ${t.valueBg} leading-tight`}>{value}</p>
+              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">{description}</p>
+            </div>
+            <div className={`flex-shrink-0 ml-4 w-12 h-12 rounded-xl ${t.iconBg} flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-300`}>
+              <Icon className={`h-6 w-6 ${t.iconColor}`} />
+            </div>
+          </div>
+          {href && (
+            <div className={`mt-3 flex items-center text-xs font-medium ${t.iconColor}`}>
+              <span>View details</span>
+              <svg className="ml-1 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </div>
+          )}
+        </div>
+      </div>
     );
 
     if (href) {
@@ -397,20 +399,25 @@ export function DashboardClientPage() {
 
   return (
     <div className="flex flex-col gap-6 min-h-screen bg-gradient-to-br from-blue-900 to-blue-400 p-6">
+      {/* Welcome Banner — only on Dashboard */}
+      <div className="rounded-2xl bg-gradient-to-r from-white via-blue-50 to-purple-50 border border-gray-100 shadow-sm px-5 py-3 flex items-center gap-4">
+        <div className="flex-shrink-0 h-12 w-12 rounded-full bg-indigo-400 flex items-center justify-center text-white text-xl font-bold shadow">
+          {user?.name?.charAt(0)?.toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-extrabold text-gray-900 leading-tight">Welcome, {user?.name}!</p>
+          <span className="inline-block mt-0.5 px-3 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wider">
+            {user?.role}
+          </span>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between">
         {user?.role === 'Client' && (
           <Button asChild>
             <Link href="/inspections/new">
               <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Inspection
-            </Link>
-          </Button>
-        )}
-        {user?.role === 'Inspector' && (
-          <Button asChild>
-            <Link href="/inspections/new">
-              <FilePlus className="mr-2 h-4 w-4" />
-              Add New Inspection
+              Raise Inspection Call
             </Link>
           </Button>
         )}
@@ -514,13 +521,13 @@ export function DashboardClientPage() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title={getTitle()} value={allTimeStats.total} icon={ClipboardCheck} description={user?.role === 'Client' ? "All inspection calls you raised" : "All time inspection calls"} />
-        <StatCard title="Completed" value={allTimeStats.completed} icon={CheckCircle} description="Successfully passed inspections" />
-        <StatCard title="Pending" value={allTimeStats.pending} icon={Clock} description="Awaiting inspector action" href="/inspections?status=Pending" />
+        <StatCard title={getTitle()} value={allTimeStats.total} icon={ClipboardCheck} description={user?.role === 'Client' ? "All inspection calls you raised" : "All time inspection calls"} theme="total" />
+        <StatCard title="Completed" value={allTimeStats.completed} icon={CheckCircle} description="Successfully passed inspections" theme="completed" />
+        <StatCard title="Pending" value={allTimeStats.pending} icon={Clock} description="Awaiting inspector action" href="/inspections?status=Pending" theme="pending" />
         {user?.role === 'Client' ? (
-          <StatCard title="Activity" value={activityCount} icon={ClipboardList} description="Manage your notes & documents" href="/activity" />
+          <StatCard title="Activity" value={activityCount} icon={ClipboardList} description="Manage your notes & documents" href="/activity" theme="activity" />
         ) : (
-          <StatCard title="Alerts" value={allTimeStats.failed} icon={AlertOctagon} description="Failed or partial inspections" />
+          <StatCard title="Alerts" value={allTimeStats.failed} icon={AlertOctagon} description="Failed or partial inspections" theme="alert" />
         )}
       </div>
       
@@ -573,7 +580,15 @@ export function DashboardClientPage() {
               <TabsContent value={activeTab}>
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {filteredInspections.length > 0 ? filteredInspections.map(inspection => (
-                      <InspectionCard key={inspection.id} inspection={inspection} />
+                      <InspectionCard
+                        key={inspection.id}
+                        inspection={inspection}
+                        previousInspectionDate={
+                          inspection.machineSlNo && inspection.status !== 'Completed'
+                            ? (prevInspectionMap.get(inspection.machineSlNo) ?? null)
+                            : null
+                        }
+                      />
                   )) : (
                       <p className="text-muted-foreground col-span-full text-center py-12">No inspections found for this category.</p>
                   )}

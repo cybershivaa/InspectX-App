@@ -130,9 +130,9 @@ export function NewInspectionForm() {
       return;
     }
 
-    // Allow both Client and Inspector to create inspection calls
-    if (user.role !== 'Client' && user.role !== 'Inspector') {
-      toast({ variant: "destructive", title: "Unauthorized", description: "Only Clients and Inspectors can create inspection calls." });
+    // Only Clients can raise new inspection calls
+    if (user.role !== 'Client') {
+      toast({ variant: "destructive", title: "Unauthorized", description: "Only Clients can raise new inspection calls." });
       return;
     }
 
@@ -178,14 +178,14 @@ export function NewInspectionForm() {
     });
   };
   
-  if (!user || !['Client', 'Inspector', 'Admin'].includes(user.role)) {
+  if (!user || user.role !== 'Client') {
      return (
        <Card>
         <CardHeader>
           <CardTitle>Unauthorized</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-center text-muted-foreground py-12">You are not authorized to create inspection calls.</p>
+          <p className="text-center text-muted-foreground py-12">Only Clients can raise new inspection calls.</p>
         </CardContent>
       </Card>
      )

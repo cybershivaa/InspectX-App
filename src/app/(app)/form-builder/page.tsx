@@ -2,19 +2,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getFormTemplates } from "@/app/actions/forms";
-import { PlusCircle, Edit, Trash2 } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge";
+import { getMachines } from "@/app/actions/data";
+import { PlusCircle } from "lucide-react";
+import { FormBuilderClient } from "./form-builder-client";
 
 export default async function FormBuilderPage() {
-  const formTemplates = await getFormTemplates();
+  const [formTemplates, machines] = await Promise.all([
+    getFormTemplates(),
+    getMachines(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -22,7 +18,7 @@ export default async function FormBuilderPage() {
         <div>
           <h1 className="text-3xl font-bold">Form Builder</h1>
           <p className="text-muted-foreground">
-            Design and manage custom inspection form templates.
+            Design custom inspection form templates and assign them to machines.
           </p>
         </div>
         <Button asChild>
@@ -37,38 +33,11 @@ export default async function FormBuilderPage() {
         <CardHeader>
           <CardTitle>Form Templates</CardTitle>
           <CardDescription>
-            Browse and manage your existing form templates.
+            Manage templates and assign them to specific machines for targeted inspections.
           </CardDescription>
         </CardHeader>
         <CardContent>
-           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Template Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Fields</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {formTemplates.map((template) => (
-                <TableRow key={template.id}>
-                  <TableCell className="font-medium">{template.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{template.description}</TableCell>
-                   <TableCell>
-                      <Badge variant="secondary">{template.fields.length}</Badge>
-                    </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="outline" size="icon" asChild>
-                      <Link href={`/form-builder/${template.id}`}>
-                        <Edit className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <FormBuilderClient templates={formTemplates} machines={machines} />
         </CardContent>
       </Card>
     </div>

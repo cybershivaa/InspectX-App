@@ -1,105 +1,105 @@
 "use server";
 
-import { supabase } from "@/lib/supabase";
-// TODO: Replace Firestore logic below with Supabase equivalent
+import { createAdminClient } from "@/lib/supabase";
 
 const mockMachines = [
-  { id: 'm1', name: 'HT Motor', machineId: 'NTPC-HTM-001', status: 'Active', lastInspection: '2024-07-15', nextInspection: '2025-01-15' },
-  { id: 'm2', name: 'LT Motor', machineId: 'NTPC-LTM-002', status: 'Active', lastInspection: '2024-07-16', nextInspection: '2025-01-16' },
-  { id: 'm3', name: 'Cable Laying/Installation', machineId: 'NTPC-CBL-003', status: 'Maintenance', lastInspection: '2024-06-20', nextInspection: '2024-12-20' },
-  { id: 'm4', name: 'Testing of Power Cables', machineId: 'NTPC-TPC-004', status: 'Active', lastInspection: '2024-07-01', nextInspection: '2025-01-01' },
-  { id: 'm5', name: 'Cable Trays', machineId: 'NTPC-CT-005', status: 'Inactive', lastInspection: '2023-01-10', nextInspection: '2023-07-10' },
-  { id: 'm6', name: 'Earthing System', machineId: 'NTPC-ES-006', status: 'Active', lastInspection: '2024-05-30', nextInspection: '2024-11-30' },
-  { id: 'm7', name: 'HT/LT SwitchGear', machineId: 'NTPC-SWG-007', status: 'Active', lastInspection: '2024-07-18', nextInspection: '2025-01-18' },
-  { id: 'm8', name: 'LT Panels', machineId: 'NTPC-LTP-008', status: 'Maintenance', lastInspection: '2024-07-05', nextInspection: '2024-08-05' },
+  { id: 'm1', name: 'HT Motor', machineid: 'NTPC-HTM-001', status: 'Active', lastinspection: '2024-07-15', nextinspection: '2025-01-15' },
+  { id: 'm2', name: 'LT Motor', machineid: 'NTPC-LTM-002', status: 'Active', lastinspection: '2024-07-16', nextinspection: '2025-01-16' },
+  { id: 'm3', name: 'Cable Laying/Installation', machineid: 'NTPC-CBL-003', status: 'Maintenance', lastinspection: '2024-06-20', nextinspection: '2024-12-20' },
+  { id: 'm4', name: 'Testing of Power Cables', machineid: 'NTPC-TPC-004', status: 'Active', lastinspection: '2024-07-01', nextinspection: '2025-01-01' },
+  { id: 'm5', name: 'Cable Trays', machineid: 'NTPC-CT-005', status: 'Inactive', lastinspection: '2023-01-10', nextinspection: '2023-07-10' },
+  { id: 'm6', name: 'Earthing System', machineid: 'NTPC-ES-006', status: 'Active', lastinspection: '2024-05-30', nextinspection: '2024-11-30' },
+  { id: 'm7', name: 'HT/LT SwitchGear', machineid: 'NTPC-SWG-007', status: 'Active', lastinspection: '2024-07-18', nextinspection: '2025-01-18' },
+  { id: 'm8', name: 'LT Panels', machineid: 'NTPC-LTP-008', status: 'Maintenance', lastinspection: '2024-07-05', nextinspection: '2024-08-05' },
 ];
 
 const mockInspections = [
   {
     id: 'i1',
-    machineId: 'm1',
-    machineName: 'HT Motor',
+    machineid: 'm1',
+    machinename: 'HT Motor',
     status: 'Completed',
     priority: 'High',
-    assignedTo: 'Inspector Gadget',
-    dueDate: '2025-01-15',
-    createdAt: Timestamp.fromDate(new Date('2024-12-20')),
+    assignedto: 'Inspector Gadget',
+    duedate: '2025-01-15',
+    createdat: new Date('2024-12-20').toISOString(),
   },
   {
     id: 'i2',
-    machineId: 'm2',
-    machineName: 'LT Motor',
+    machineid: 'm2',
+    machinename: 'LT Motor',
     status: 'Pending',
     priority: 'Medium',
-    assignedTo: 'Inspector Gadget',
-    dueDate: '2025-01-16',
-    createdAt: Timestamp.fromDate(new Date('2024-12-22')),
+    assignedto: 'Inspector Gadget',
+    duedate: '2025-01-16',
+    createdat: new Date('2024-12-22').toISOString(),
   },
   {
     id: 'i3',
-    machineId: 'm3',
-    machineName: 'Cable Laying/Installation',
+    machineid: 'm3',
+    machinename: 'Cable Laying/Installation',
     status: 'Failed',
     priority: 'High',
-    assignedTo: 'Inspector Gadget',
-    dueDate: '2024-12-20',
-    createdAt: Timestamp.fromDate(new Date('2024-12-10')),
+    assignedto: 'Inspector Gadget',
+    duedate: '2024-12-20',
+    createdat: new Date('2024-12-10').toISOString(),
   },
   {
     id: 'i4',
-    machineId: 'm7',
-    machineName: 'HT/LT SwitchGear',
+    machineid: 'm7',
+    machinename: 'HT/LT SwitchGear',
     status: 'Upcoming',
     priority: 'Low',
-    assignedTo: null,
-    dueDate: '2025-01-18',
-    createdAt: Timestamp.fromDate(new Date('2024-12-25')),
+    assignedto: null,
+    duedate: '2025-01-18',
+    createdat: new Date('2024-12-25').toISOString(),
   },
   {
     id: 'i5',
-    machineId: 'm8',
-    machineName: 'LT Panels',
+    machineid: 'm8',
+    machinename: 'LT Panels',
     status: 'Pending',
     priority: 'Medium',
-    assignedTo: 'Inspector Gadget',
-    dueDate: '2025-01-05',
-    createdAt: Timestamp.fromDate(new Date('2024-12-26')),
+    assignedto: 'Inspector Gadget',
+    duedate: '2025-01-05',
+    createdat: new Date('2024-12-26').toISOString(),
   },
 ];
 
 export async function seedSampleData() {
   try {
+    const supabaseAdmin = createAdminClient();
+
     // Check if data already exists
-    const checkDoc = await getDoc(doc(db, "_meta", "seeded"));
-    if (checkDoc.exists()) {
+    const { data: existing } = await supabaseAdmin
+      .from('machines')
+      .select('id')
+      .limit(1);
+    if (existing && existing.length > 0) {
       return { success: true, message: "Data already seeded" };
     }
 
     // Seed machines
-    for (const machine of mockMachines) {
-      await setDoc(doc(db, "machines", machine.id), machine);
-    }
+    const { error: machineError } = await supabaseAdmin
+      .from('machines')
+      .upsert(mockMachines, { onConflict: 'id' });
+    if (machineError) throw machineError;
 
     // Seed inspections
-    for (const inspection of mockInspections) {
-      await setDoc(doc(db, "inspections", inspection.id), inspection);
-    }
+    const { error: inspError } = await supabaseAdmin
+      .from('inspections')
+      .upsert(mockInspections, { onConflict: 'id' });
+    if (inspError) throw inspError;
 
-    // Mark as seeded
-    await setDoc(doc(db, "_meta", "seeded"), { 
-      seededAt: Timestamp.now(),
-      version: "1.0"
-    });
-
-    return { 
-      success: true, 
-      message: `Seeded ${mockMachines.length} machines and ${mockInspections.length} inspections` 
+    return {
+      success: true,
+      message: `Seeded ${mockMachines.length} machines and ${mockInspections.length} inspections`
     };
   } catch (error: any) {
     console.error("Error seeding data:", error);
-    return { 
-      success: false, 
-      error: error.message || "Failed to seed data" 
+    return {
+      success: false,
+      error: error.message || "Failed to seed data"
     };
   }
 }

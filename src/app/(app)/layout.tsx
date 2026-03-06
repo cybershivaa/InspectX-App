@@ -17,6 +17,7 @@ import { LogOut } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SidebarNav } from '@/components/SidebarNav';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PendingInspectionWarning } from '@/components/PendingInspectionWarning';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAppContext();
@@ -81,29 +82,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SidebarInset>
         <div className="flex flex-col h-full">
           <Header />
-          {/* Welcome Banner */}
-          <div className="mx-4 mt-4 mb-0 rounded-2xl bg-gradient-to-r from-white via-blue-50 to-purple-50 border border-gray-100 shadow-sm px-5 py-3 flex items-center gap-4">
-            {/* Avatar */}
-            <div className="flex-shrink-0 h-12 w-12 rounded-full bg-indigo-400 flex items-center justify-center text-white text-xl font-bold shadow">
-              {user.name?.charAt(0)?.toUpperCase()}
-            </div>
-            {/* Text */}
-            <div className="flex-1 min-w-0">
-              <p className="text-lg font-extrabold text-gray-900 leading-tight">Welcome, {user.name}!</p>
-              <span className="inline-block mt-0.5 px-3 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wider">
-                {user.role}
-              </span>
-            </div>
-            {/* Logout */}
-            <Button
-              onClick={handleLogout}
-              className="flex-shrink-0 rounded-full bg-gradient-to-r from-pink-500 to-rose-400 hover:from-pink-600 hover:to-rose-500 text-white font-semibold px-5 py-2 shadow-md border-0"
-            >
-              Logout
-            </Button>
-          </div>
           <main className="flex-1 overflow-y-auto p-6">{children}</main>
         </div>
+        <PendingInspectionWarning />
       </SidebarInset>
     </SidebarProvider>
   );

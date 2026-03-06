@@ -5,32 +5,41 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Role } from '@/lib/types';
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
-import { LayoutDashboard, Search, FileText, Wrench, Users, AlertTriangle, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Search, FileText, Wrench, Users, AlertTriangle, ClipboardList, Archive } from 'lucide-react';
 
-const navItems = {
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<any>;
+  disabled?: boolean;
+  tooltip?: string;
+}
+
+const navItems: Record<string, NavItem[]> = {
   all: [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   ],
   Admin: [
     { href: '/inspections', label: 'Inspections', icon: FileText },
+    { href: '/inspection-records', label: 'Inspection Records', icon: Archive },
     { href: '/search', label: 'Machine Search', icon: Search },
     { href: '/anomaly-detection', label: 'Anomaly Detection', icon: AlertTriangle },
     { href: '/admin', label: 'Admin Panel', icon: Users },
     { href: '/form-builder', label: 'Form Builder', icon: Wrench },
   ],
   Inspector: [
-    { href: '/inspections', label: 'My Inspections', icon: FileText },
+    { href: '/inspections', label: 'Assigned Inspections', icon: FileText },
     { href: '/anomaly-detection', label: 'Anomaly Detection', icon: AlertTriangle },
   ],
   Client: [
-    { href: '/inspections', label: 'My Inspections', icon: FileText },
+    { href: '/inspections', label: 'My Raised Calls', icon: FileText },
     { href: '/activity', label: 'Activity', icon: ClipboardList },
   ],
 };
 
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname();
-  const userNavItems = [...navItems.all, ...(navItems[role] || [])];
+  const userNavItems: NavItem[] = [...(navItems.all || []), ...(navItems[role] || [])];
 
   return (
     <SidebarMenu className="p-2">

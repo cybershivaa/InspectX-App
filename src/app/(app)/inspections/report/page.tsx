@@ -213,7 +213,7 @@ const formSchema = z.object({
 
 export type InspectionReportFormValues = z.infer<typeof formSchema>;
 
-const equipmentFieldMapping: Record<string, FieldPath<InspectionReportFormValues>[]> = {
+const equipmentFieldMapping: Record<string, string[]> = {
     'ht-motor': ['installation.result', 'damage.result', 'cleanliness.result', 'termination.result', 'earthing.result', 'rotation.result', 'windingTemp.result', 'testingKitsCalibration.result', 'motorIrPiWr.result', 'spaceHeaterIrWr.result'],
     'lt-motor': ['installation.result', 'damage.result', 'cleanliness.result', 'termination.result', 'earthing.result', 'rotation.result', 'windingTemp.result', 'testingKitsCalibration.result', 'motorIrPiWr.result', 'spaceHeaterIrWr.result'],
     'cable-laying': ['layingOfCable.result', 'trefoilFormation.result', 'dressingOfCables.result', 'layingOfDifferentVoltages.result', 'testingBeforeLaying.result', 'cableIdentificationTags.result', 'bendingRadius.result', 'earthingOfSheath.result'],
@@ -575,9 +575,9 @@ export default function InspectionReportPage() {
   const handleNextStep2 = async () => {
     const selectedEquipment = form.getValues('equipmentName');
     
-    const fieldsToValidate: FieldPath<InspectionReportFormValues>[] = selectedEquipment.flatMap(
+    const fieldsToValidate = selectedEquipment.flatMap(
         (eq) => equipmentFieldMapping[eq] || []
-    );
+    ) as FieldPath<InspectionReportFormValues>[];
     
     if (fieldsToValidate.length === 0) {
         setCurrentStep(3);
