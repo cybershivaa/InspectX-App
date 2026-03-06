@@ -47,6 +47,30 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Auto-clear stale service worker caches
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  registrations.forEach(function(registration) {
+                    registration.update();
+                  });
+                });
+                // Clear old caches that might serve stale content
+                if ('caches' in window) {
+                  caches.keys().then(function(names) {
+                    names.forEach(function(name) {
+                      if (name.includes('workbox') || name.includes('next')) {
+                        caches.delete(name);
+                      }
+                    });
+                  });
+                }
+              }
+            `,
+          }}
+        />
       </head>
       <body className="font-body antialiased">
         <AppProvider>
