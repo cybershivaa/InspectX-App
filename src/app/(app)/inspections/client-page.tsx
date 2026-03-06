@@ -276,13 +276,13 @@ function InspectionsClientPageComponent() {
     <>
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <CardTitle>{getTitle()}</CardTitle>
-            <CardDescription>{getDescription()}</CardDescription>
+            <CardTitle className="text-lg sm:text-xl">{getTitle()}</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">{getDescription()}</CardDescription>
           </div>
           {user?.role === 'Client' && (
-            <Button asChild>
+            <Button asChild size="sm" className="w-full sm:w-auto">
               <a href="/inspections/new">
                 <FilePlus className="mr-2 h-4 w-4" />
                 Raise Inspection Call
@@ -293,14 +293,15 @@ function InspectionsClientPageComponent() {
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="mb-4">
-            <TabsList>
+            <TabsList className="w-full sm:w-auto">
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="Pending">Pending</TabsTrigger>
-                <TabsTrigger value="Completed">Completed</TabsTrigger>
+                <TabsTrigger value="Completed">Done</TabsTrigger>
                 <TabsTrigger value="Upcoming">Upcoming</TabsTrigger>
             </TabsList>
         </Tabs>
-        <Table>
+        <div className="table-responsive">
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead>Machine</TableHead>
@@ -444,6 +445,7 @@ function InspectionsClientPageComponent() {
             )}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
       {selectedReport && (

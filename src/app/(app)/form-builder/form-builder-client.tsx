@@ -93,7 +93,8 @@ export function FormBuilderClient({ templates, machines }: Props) {
 
   return (
     <>
-      <Table>
+      <div className="table-responsive">
+      <Table className="min-w-[600px]">
         <TableHeader>
           <TableRow>
             <TableHead>Template Name</TableHead>
@@ -177,6 +178,7 @@ export function FormBuilderClient({ templates, machines }: Props) {
           )}
         </TableBody>
       </Table>
+      </div>
 
       {/* Assign to Machine Dialog */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>

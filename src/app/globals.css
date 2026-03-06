@@ -82,8 +82,26 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Mobile-friendly table wrapper */
+@layer utilities {
+  .table-responsive {
+    @apply w-full overflow-x-auto -mx-1 px-1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .touch-pan-x {
+    touch-action: pan-x;
   }
 }
 

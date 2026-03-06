@@ -66,10 +66,10 @@ function InspectionCard({ inspection, previousInspectionDate }: { inspection: In
 
 const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartConfig: any}) => {
    return (
-    <ChartContainer config={chartConfig} className="w-full h-[400px]">
+    <ChartContainer config={chartConfig} className="w-full h-[280px] sm:h-[400px]">
       {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={400}>
-          <PieChart margin={{ top: 20, right: 80, bottom: 20, left: 80 }}>
+          <ResponsiveContainer width="100%" height="100%">
+          <PieChart margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
             <Tooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
             <Pie
               data={chartData}
@@ -77,7 +77,7 @@ const InspectionChart = ({ chartData, chartConfig }: { chartData: any[], chartCo
               nameKey="name"
               cx="50%"
               cy="50%"
-              outerRadius={90}
+              outerRadius={70}
               labelLine={true}
               label={({
                 cx,
@@ -303,15 +303,15 @@ export function DashboardClientPage() {
       <div className={`relative rounded-2xl border ${t.border} bg-white shadow-sm hover:shadow-lg ${t.glow} transition-all duration-300 overflow-hidden group ${href ? 'cursor-pointer' : ''}`}>
         {/* Top gradient accent bar */}
         <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${t.bg}`} />
-        <div className="p-5">
+        <div className="p-3 sm:p-5">
           <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">{title}</p>
-              <p className={`text-3xl font-extrabold ${t.valueBg} leading-tight`}>{value}</p>
-              <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">{description}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1 truncate">{title}</p>
+              <p className={`text-2xl sm:text-3xl font-extrabold ${t.valueBg} leading-tight`}>{value}</p>
+              <p className="text-[10px] sm:text-xs text-gray-400 mt-1 sm:mt-1.5 leading-relaxed hidden sm:block">{description}</p>
             </div>
-            <div className={`flex-shrink-0 ml-4 w-12 h-12 rounded-xl ${t.iconBg} flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-300`}>
-              <Icon className={`h-6 w-6 ${t.iconColor}`} />
+            <div className={`flex-shrink-0 ml-2 sm:ml-4 w-9 h-9 sm:w-12 sm:h-12 rounded-xl ${t.iconBg} flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-300`}>
+              <Icon className={`h-4 w-4 sm:h-6 sm:w-6 ${t.iconColor}`} />
             </div>
           </div>
           {href && (
@@ -382,13 +382,13 @@ export function DashboardClientPage() {
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <Skeleton className="h-24" />
           <Skeleton className="h-24" />
           <Skeleton className="h-24" />
           <Skeleton className="h-24" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           <Skeleton className="lg:col-span-2 h-96" />
           <Skeleton className="h-96" />
         </div>
@@ -398,14 +398,14 @@ export function DashboardClientPage() {
 
 
   return (
-    <div className="flex flex-col gap-6 min-h-screen bg-gradient-to-br from-blue-900 to-blue-400 p-6">
+    <div className="flex flex-col gap-4 sm:gap-6 min-h-screen bg-gradient-to-br from-blue-900 to-blue-400 p-3 sm:p-4 md:p-6">
       {/* Welcome Banner — only on Dashboard */}
-      <div className="rounded-2xl bg-gradient-to-r from-white via-blue-50 to-purple-50 border border-gray-100 shadow-sm px-5 py-3 flex items-center gap-4">
-        <div className="flex-shrink-0 h-12 w-12 rounded-full bg-indigo-400 flex items-center justify-center text-white text-xl font-bold shadow">
+      <div className="rounded-2xl bg-gradient-to-r from-white via-blue-50 to-purple-50 border border-gray-100 shadow-sm px-3 sm:px-5 py-3 flex items-center gap-3 sm:gap-4">
+        <div className="flex-shrink-0 h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-indigo-400 flex items-center justify-center text-white text-lg sm:text-xl font-bold shadow">
           {user?.name?.charAt(0)?.toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-lg font-extrabold text-gray-900 leading-tight">Welcome, {user?.name}!</p>
+          <p className="text-base sm:text-lg font-extrabold text-gray-900 leading-tight">Welcome, {user?.name}!</p>
           <span className="inline-block mt-0.5 px-3 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold uppercase tracking-wider">
             {user?.role}
           </span>
@@ -539,11 +539,11 @@ export function DashboardClientPage() {
           </CardHeader>
           <CardContent>
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-              <div className="flex items-center justify-between mb-4">
-                  <TabsList>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
+                  <TabsList className="w-full sm:w-auto">
                   <TabsTrigger value="all">All</TabsTrigger>
                   <TabsTrigger value="Pending">Pending</TabsTrigger>
-                  <TabsTrigger value="Completed">Completed</TabsTrigger>
+                  <TabsTrigger value="Completed">Done</TabsTrigger>
                   <TabsTrigger value="Upcoming">Upcoming</TabsTrigger>
                   </TabsList>
                   <DropdownMenu>
@@ -578,7 +578,7 @@ export function DashboardClientPage() {
                   </DropdownMenu>
               </div>
               <TabsContent value={activeTab}>
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredInspections.length > 0 ? filteredInspections.map(inspection => (
                       <InspectionCard
                         key={inspection.id}

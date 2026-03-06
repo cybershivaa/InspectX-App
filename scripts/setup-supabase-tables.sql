@@ -132,6 +132,58 @@ CREATE INDEX IF NOT EXISTS idx_notifications_timestamp ON public.notifications(t
 CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON public.activity_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_entity ON public.activity_logs(entity_type, entity_id);
 
+-- Drop existing policies if any
+DO $$ 
+BEGIN
+  DROP POLICY IF EXISTS "machines_read_authenticated" ON public.machines;
+  DROP POLICY IF EXISTS "users_read_authenticated" ON public.users;
+  DROP POLICY IF EXISTS "inspections_read_authenticated" ON public.inspections;
+  DROP POLICY IF EXISTS "form_templates_read_authenticated" ON public.form_templates;
+  DROP POLICY IF EXISTS "machines_all_service_role" ON public.machines;
+  DROP POLICY IF EXISTS "users_all_service_role" ON public.users;
+  DROP POLICY IF EXISTS "inspections_all_service_role" ON public.inspections;
+  DROP POLICY IF EXISTS "form_templates_all_service_role" ON public.form_templates;
+  DROP POLICY IF EXISTS "pending_users_all_service_role" ON public.pending_users;
+  DROP POLICY IF EXISTS "machines_read_anon" ON public.machines;
+  DROP POLICY IF EXISTS "users_read_anon" ON public.users;
+  DROP POLICY IF EXISTS "inspections_read_anon" ON public.inspections;
+  DROP POLICY IF EXISTS "inspections_all_anon" ON public.inspections;
+  DROP POLICY IF EXISTS "form_templates_read_anon" ON public.form_templates;
+  DROP POLICY IF EXISTS "pending_users_insert_anon" ON public.pending_users;
+  DROP POLICY IF EXISTS "notifications_read_authenticated" ON public.notifications;
+  DROP POLICY IF EXISTS "notifications_read_anon" ON public.notifications;
+  DROP POLICY IF EXISTS "notifications_all_anon" ON public.notifications;
+  DROP POLICY IF EXISTS "notifications_all_service_role" ON public.notifications;
+  DROP POLICY IF EXISTS "activity_logs_read_authenticated" ON public.activity_logs;
+  DROP POLICY IF EXISTS "activity_logs_read_anon" ON public.activity_logs;
+  DROP POLICY IF EXISTS "activity_logs_all_service_role" ON public.activity_logs;
+  
+  -- Old policy names that might exist
+  DROP POLICY IF EXISTS "Allow read for authenticated" ON public.machines;
+  DROP POLICY IF EXISTS "Allow read for authenticated" ON public.users;
+  DROP POLICY IF EXISTS "Allow read for authenticated" ON public.inspections;
+  DROP POLICY IF EXISTS "Allow read for authenticated" ON public.form_templates;
+  DROP POLICY IF EXISTS "Allow all for service_role" ON public.machines;
+  DROP POLICY IF EXISTS "Allow all for service_role" ON public.users;
+  DROP POLICY IF EXISTS "Allow all for service_role" ON public.inspections;
+  DROP POLICY IF EXISTS "Allow all for service_role" ON public.form_templates;
+  DROP POLICY IF EXISTS "Allow all for service_role" ON public.pending_users;
+  DROP POLICY IF EXISTS "Allow anon read machines" ON public.machines;
+  DROP POLICY IF EXISTS "Allow anon read users" ON public.users;
+  DROP POLICY IF EXISTS "Allow anon read inspections" ON public.inspections;
+  DROP POLICY IF EXISTS "Allow anon all inspections" ON public.inspections;
+  DROP POLICY IF EXISTS "Allow anon read form_templates" ON public.form_templates;
+  DROP POLICY IF EXISTS "Allow anon insert pending_users" ON public.pending_users;
+  DROP POLICY IF EXISTS "Allow read own notifications" ON public.notifications;
+  DROP POLICY IF EXISTS "Allow anon read notifications" ON public.notifications;
+  DROP POLICY IF EXISTS "Allow anon all notifications" ON public.notifications;
+  DROP POLICY IF EXISTS "Allow all for service_role notifications" ON public.notifications;
+  DROP POLICY IF EXISTS "Allow read activity_logs" ON public.activity_logs;
+  DROP POLICY IF EXISTS "Allow anon read activity_logs" ON public.activity_logs;
+  DROP POLICY IF EXISTS "Allow all for service_role activity_logs" ON public.activity_logs;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
 ALTER TABLE public.machines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.inspections ENABLE ROW LEVEL SECURITY;
@@ -140,37 +192,33 @@ ALTER TABLE public.pending_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
--- Allow all authenticated users to read
-CREATE POLICY IF NOT EXISTS "Allow read for authenticated" ON public.machines FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "Allow read for authenticated" ON public.users FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "Allow read for authenticated" ON public.inspections FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "Allow read for authenticated" ON public.form_templates FOR SELECT TO authenticated USING (true);
+-- Create new policies
+CREATE POLICY "machines_read_authenticated" ON public.machines FOR SELECT TO authenticated USING (true);
+CREATE POLICY "users_read_authenticated" ON public.users FOR SELECT TO authenticated USING (true);
+CREATE POLICY "inspections_read_authenticated" ON public.inspections FOR SELECT TO authenticated USING (true);
+CREATE POLICY "form_templates_read_authenticated" ON public.form_templates FOR SELECT TO authenticated USING (true);
 
--- Allow service role full access (for server actions)
-CREATE POLICY IF NOT EXISTS "Allow all for service_role" ON public.machines FOR ALL TO service_role USING (true);
-CREATE POLICY IF NOT EXISTS "Allow all for service_role" ON public.users FOR ALL TO service_role USING (true);
-CREATE POLICY IF NOT EXISTS "Allow all for service_role" ON public.inspections FOR ALL TO service_role USING (true);
-CREATE POLICY IF NOT EXISTS "Allow all for service_role" ON public.form_templates FOR ALL TO service_role USING (true);
-CREATE POLICY IF NOT EXISTS "Allow all for service_role" ON public.pending_users FOR ALL TO service_role USING (true);
+CREATE POLICY "machines_all_service_role" ON public.machines FOR ALL TO service_role USING (true);
+CREATE POLICY "users_all_service_role" ON public.users FOR ALL TO service_role USING (true);
+CREATE POLICY "inspections_all_service_role" ON public.inspections FOR ALL TO service_role USING (true);
+CREATE POLICY "form_templates_all_service_role" ON public.form_templates FOR ALL TO service_role USING (true);
+CREATE POLICY "pending_users_all_service_role" ON public.pending_users FOR ALL TO service_role USING (true);
 
--- Allow anon read access (needed for client-side supabase calls)
-CREATE POLICY IF NOT EXISTS "Allow anon read machines" ON public.machines FOR SELECT TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon read users" ON public.users FOR SELECT TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon read inspections" ON public.inspections FOR SELECT TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon all inspections" ON public.inspections FOR ALL TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon read form_templates" ON public.form_templates FOR SELECT TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon insert pending_users" ON public.pending_users FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "machines_read_anon" ON public.machines FOR SELECT TO anon USING (true);
+CREATE POLICY "users_read_anon" ON public.users FOR SELECT TO anon USING (true);
+CREATE POLICY "inspections_read_anon" ON public.inspections FOR SELECT TO anon USING (true);
+CREATE POLICY "inspections_all_anon" ON public.inspections FOR ALL TO anon USING (true);
+CREATE POLICY "form_templates_read_anon" ON public.form_templates FOR SELECT TO anon USING (true);
+CREATE POLICY "pending_users_insert_anon" ON public.pending_users FOR INSERT TO anon WITH CHECK (true);
 
--- Notifications policies
-CREATE POLICY IF NOT EXISTS "Allow read own notifications" ON public.notifications FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon read notifications" ON public.notifications FOR SELECT TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon all notifications" ON public.notifications FOR ALL TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow all for service_role notifications" ON public.notifications FOR ALL TO service_role USING (true);
+CREATE POLICY "notifications_read_authenticated" ON public.notifications FOR SELECT TO authenticated USING (true);
+CREATE POLICY "notifications_read_anon" ON public.notifications FOR SELECT TO anon USING (true);
+CREATE POLICY "notifications_all_anon" ON public.notifications FOR ALL TO anon USING (true);
+CREATE POLICY "notifications_all_service_role" ON public.notifications FOR ALL TO service_role USING (true);
 
--- Activity logs policies
-CREATE POLICY IF NOT EXISTS "Allow read activity_logs" ON public.activity_logs FOR SELECT TO authenticated USING (true);
-CREATE POLICY IF NOT EXISTS "Allow anon read activity_logs" ON public.activity_logs FOR SELECT TO anon USING (true);
-CREATE POLICY IF NOT EXISTS "Allow all for service_role activity_logs" ON public.activity_logs FOR ALL TO service_role USING (true);
+CREATE POLICY "activity_logs_read_authenticated" ON public.activity_logs FOR SELECT TO authenticated USING (true);
+CREATE POLICY "activity_logs_read_anon" ON public.activity_logs FOR SELECT TO anon USING (true);
+CREATE POLICY "activity_logs_all_service_role" ON public.activity_logs FOR ALL TO service_role USING (true);
 
 -- Enable realtime for notifications
 ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;

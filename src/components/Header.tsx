@@ -45,7 +45,7 @@ function LiveClock() {
   });
 
   return (
-    <div className="flex flex-col items-center justify-center bg-white/20 border border-white/30 rounded-xl px-5 py-1.5 leading-tight shadow-sm">
+    <div className="hidden sm:flex flex-col items-center justify-center bg-white/20 border border-white/30 rounded-xl px-5 py-1.5 leading-tight shadow-sm">
       <span className="text-sm font-bold text-white tracking-wide">{timeStr}</span>
       <span className="text-xs text-blue-100">{dateStr}</span>
     </div>
@@ -80,7 +80,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-gradient-to-r from-blue-900 to-blue-400 px-4 sm:px-6 shadow-sm">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b bg-gradient-to-r from-blue-900 to-blue-400 px-2 sm:px-4 md:px-6 shadow-sm">
       {/* Left: Sidebar trigger + Role badge */}
       <SidebarTrigger className="text-white hover:text-blue-100" />
 
@@ -96,7 +96,7 @@ export function Header() {
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         {/* Lightning/activity icon */}
         <Button
           variant="ghost"

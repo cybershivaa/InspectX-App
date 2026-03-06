@@ -256,8 +256,8 @@ export default function SearchPage() {
       <div className="lg:col-span-2">
         <Card className="border-0 shadow-md rounded-2xl overflow-hidden min-h-[80vh]">
           <div className="h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-          <CardHeader className="px-6 pt-5 pb-3">
-            <div className="flex items-center justify-between">
+          <CardHeader className="px-4 sm:px-6 pt-5 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg text-gray-800">
                   {displayMachineName ? (
@@ -279,10 +279,10 @@ export default function SearchPage() {
             </div>
           </CardHeader>
 
-          <CardContent className="px-6 pb-6">
+          <CardContent className="px-4 sm:px-6 pb-6">
             {!displayMachineName ? (
-              <div className="flex flex-col items-center justify-center py-32 text-gray-400">
-                <Search className="h-14 w-14 mb-4 opacity-20" />
+              <div className="flex flex-col items-center justify-center py-16 sm:py-32 text-gray-400">
+                <Search className="h-10 w-10 sm:h-14 sm:w-14 mb-4 opacity-20" />
                 <p className="text-lg font-medium">Search for a machine</p>
                 <p className="text-sm mt-1 opacity-70">Inspection records will appear instantly as you type.</p>
               </div>
@@ -307,7 +307,7 @@ export default function SearchPage() {
                   return (
                     <div key={insp.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
                       <div className={`h-0.5 w-full ${accentColor}`} />
-                      <div className="p-5">
+                      <div className="p-3 sm:p-5">
                         {/* Header row */}
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -349,7 +349,7 @@ export default function SearchPage() {
                         <Separator className="mb-3" />
 
                         {/* Detail grid */}
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                           <div className="flex items-start gap-2">
                             <Calendar className="h-3.5 w-3.5 text-gray-400 shrink-0 mt-0.5" />
                             <div>

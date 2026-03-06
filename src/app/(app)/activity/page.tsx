@@ -284,13 +284,13 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Activity</h1>
-          <p className="text-muted-foreground mt-1">Manage your notes and documents</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Activity</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Manage your notes and documents</p>
         </div>
-        <Button onClick={() => setIsDialogOpen(true)}>
+        <Button onClick={() => setIsDialogOpen(true)} className="w-full sm:w-auto">
           <PlusCircle className="mr-2 h-4 w-4" />
           Add Activity
         </Button>

@@ -173,11 +173,11 @@ export default function AnomalyDetectionPage() {
       {/* Header Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              <Bot className="h-8 w-8 text-primary flex-shrink-0 mt-1" />
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <Bot className="h-6 w-6 sm:h-8 sm:w-8 text-primary flex-shrink-0 mt-1" />
               <div>
-                <CardTitle className="text-2xl">Anomaly Detection System</CardTitle>
+                <CardTitle className="text-xl sm:text-2xl">Anomaly Detection System</CardTitle>
                 <CardDescription>
                   Automatically detect unusual patterns, failed inspections, and overdue tasks.
                 </CardDescription>

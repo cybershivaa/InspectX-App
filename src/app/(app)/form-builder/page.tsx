@@ -13,15 +13,15 @@ export default async function FormBuilderPage() {
   ]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Form Builder</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold">Form Builder</h1>
+          <p className="text-muted-foreground text-sm sm:text-base">
             Design custom inspection form templates and assign them to machines.
           </p>
         </div>
-        <Button asChild>
+        <Button asChild size="sm" className="w-full sm:w-auto">
           <Link href="/form-builder/new">
             <PlusCircle className="mr-2 h-4 w-4" />
             Create Template

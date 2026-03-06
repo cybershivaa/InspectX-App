@@ -131,7 +131,7 @@ export default function AuthPage() {
   if (loading || user) return null;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
+    <div className="flex min-h-screen w-full overflow-hidden">
       {/* LEFT PANEL */}
       <div className="relative hidden md:flex w-[45%] flex-col items-center justify-center overflow-hidden">
         {/* Electrical dark background with SVG circuit pattern */}
@@ -193,8 +193,7 @@ export default function AuthPage() {
       </div>
 
       {/* RIGHT PANEL */}
-      <div
-        className="flex flex-1 items-center justify-center p-6 md:p-10 relative overflow-hidden"
+      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 md:p-10 relative overflow-hidden"
         style={{
           background: 'linear-gradient(135deg, #e8f0fe 0%, #f0f4ff 30%, #faf5ff 60%, #e0f2fe 100%)',
         }}
@@ -216,7 +215,7 @@ export default function AuthPage() {
           <rect width="100%" height="100%" fill="url(#dots)"/>
         </svg>
 
-        <div className="relative z-10 w-full max-w-md">
+        <div className="relative z-10 w-full max-w-md px-2 sm:px-0">
           {/* Logo above card */}
           <div className="flex flex-col items-center mb-6">
             <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-xl mb-3"
@@ -241,11 +240,11 @@ export default function AuthPage() {
           >
             {/* Colored top accent bar */}
             <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, #6366f1, #38bdf8, #818cf8)' }} />
-            <CardHeader className="pb-2 pt-7 px-8">
-              <CardTitle className="text-2xl font-bold text-gray-800">Welcome Back!</CardTitle>
+            <CardHeader className="pb-2 pt-5 sm:pt-7 px-5 sm:px-8">
+              <CardTitle className="text-xl sm:text-2xl font-bold text-gray-800">Welcome Back!</CardTitle>
               <CardDescription className="text-gray-500">Sign in to your InspectX account</CardDescription>
             </CardHeader>
-            <CardContent className="px-8 pb-8">
+            <CardContent className="px-5 sm:px-8 pb-6 sm:pb-8">
               <LoginForm />
               <div className="mt-5 text-center text-sm text-muted-foreground">
                 Don&apos;t have an account?{' '}

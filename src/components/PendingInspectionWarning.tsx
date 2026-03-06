@@ -109,7 +109,7 @@ export function PendingInspectionWarning() {
   if (!isAdmin || !visible || pendingCalls.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-md w-full animate-in slide-in-from-bottom-5 fade-in duration-300">
+    <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-50 max-w-md w-auto sm:w-full animate-in slide-in-from-bottom-5 fade-in duration-300">
       <div className="bg-white dark:bg-gray-900 border border-amber-300 rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-3 flex items-center gap-3">

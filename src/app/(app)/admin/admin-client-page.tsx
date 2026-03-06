@@ -234,22 +234,22 @@ function StatsCard({
   return (
     <div className="relative overflow-hidden rounded-2xl border bg-card shadow-sm hover:shadow-md transition-all duration-300 group">
       <div className={"absolute top-0 left-0 right-0 h-1 bg-gradient-to-r " + gradient} />
-      <div className="p-5">
+      <div className="p-3 sm:p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1 truncate">
               {title}
             </p>
-            <p className="text-3xl font-extrabold tracking-tight">{value}</p>
-            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+            <p className="text-2xl sm:text-3xl font-extrabold tracking-tight">{value}</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground mt-1 hidden sm:block">{subtitle}</p>
           </div>
           <div
             className={
-              "flex-shrink-0 ml-3 w-11 h-11 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform " +
+              "flex-shrink-0 ml-2 sm:ml-3 w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform " +
               iconBg
             }
           >
-            <Icon className={"h-5 w-5 " + iconColor} />
+            <Icon className={"h-4 w-4 sm:h-5 sm:w-5 " + iconColor} />
           </div>
         </div>
       </div>
@@ -444,9 +444,9 @@ export function AdminClientPage() {
   /* ── Guards ── */
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-3 sm:p-6">
         <Skeleton className="h-12 w-1/3" />
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} className="h-28 rounded-2xl" />
           ))}
@@ -690,18 +690,18 @@ export function AdminClientPage() {
     <>
       <div className="space-y-6">
         {/* ── Header ── */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-xl">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-6 text-white shadow-xl">
           <div className="absolute inset-0 opacity-40 pointer-events-none" />
-          <div className="relative flex items-center justify-between">
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center">
                 <Shield className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                   Admin Control Panel
                 </h1>
-                <p className="text-sm text-white/60">
+                <p className="text-xs sm:text-sm text-white/60">
                   Manage users, approvals, and inspections
                 </p>
               </div>
@@ -710,7 +710,7 @@ export function AdminClientPage() {
               variant="secondary"
               size="sm"
               onClick={handleRefreshAll}
-              className="rounded-lg"
+              className="rounded-lg w-full sm:w-auto"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh All
@@ -781,26 +781,27 @@ export function AdminClientPage() {
 
         {/* ── Tab Navigation ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5 h-12 rounded-xl bg-muted/50 p-1">
+          <TabsList className="flex w-full overflow-x-auto h-12 rounded-xl bg-muted/50 p-1 gap-1">
             <TabsTrigger
               value="overview"
-              className="rounded-lg data-[state=active]:shadow-sm text-sm font-medium"
+              className="rounded-lg data-[state=active]:shadow-sm text-xs sm:text-sm font-medium flex-shrink-0"
             >
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Overview
+              <BarChart3 className="mr-1 sm:mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Overview</span>
+              <span className="sm:hidden">Stats</span>
             </TabsTrigger>
             <TabsTrigger
               value="users"
-              className="rounded-lg data-[state=active]:shadow-sm text-sm font-medium"
+              className="rounded-lg data-[state=active]:shadow-sm text-xs sm:text-sm font-medium flex-shrink-0"
             >
-              <Users className="mr-2 h-4 w-4" />
+              <Users className="mr-1 sm:mr-2 h-4 w-4" />
               Users
             </TabsTrigger>
             <TabsTrigger
               value="pending"
-              className="rounded-lg data-[state=active]:shadow-sm text-sm font-medium relative"
+              className="rounded-lg data-[state=active]:shadow-sm text-xs sm:text-sm font-medium relative flex-shrink-0"
             >
-              <Inbox className="mr-2 h-4 w-4" />
+              <Inbox className="mr-1 sm:mr-2 h-4 w-4" />
               Pending
               {stats.pendingRequests > 0 && (
                 <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-amber-500 text-[10px] text-white font-bold flex items-center justify-center">
@@ -810,16 +811,17 @@ export function AdminClientPage() {
             </TabsTrigger>
             <TabsTrigger
               value="inspections"
-              className="rounded-lg data-[state=active]:shadow-sm text-sm font-medium"
+              className="rounded-lg data-[state=active]:shadow-sm text-xs sm:text-sm font-medium flex-shrink-0"
             >
-              <FileText className="mr-2 h-4 w-4" />
-              Inspections
+              <FileText className="mr-1 sm:mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Inspections</span>
+              <span className="sm:hidden">Insp.</span>
             </TabsTrigger>
             <TabsTrigger
               value="activity-logs"
-              className="rounded-lg data-[state=active]:shadow-sm text-sm font-medium"
+              className="rounded-lg data-[state=active]:shadow-sm text-xs sm:text-sm font-medium flex-shrink-0"
             >
-              <Activity className="mr-2 h-4 w-4" />
+              <Activity className="mr-1 sm:mr-2 h-4 w-4" />
               Logs
             </TabsTrigger>
           </TabsList>
@@ -1089,7 +1091,7 @@ export function AdminClientPage() {
           <TabsContent value="users" className="mt-6">
             <Card className="rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base">User Management</CardTitle>
                     <CardDescription className="text-xs">
@@ -1100,11 +1102,11 @@ export function AdminClientPage() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="relative">
+                    <div className="relative flex-1 sm:flex-none">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         placeholder="Search users..."
-                        className="pl-9 h-9 w-56 rounded-lg text-sm"
+                        className="pl-9 h-9 w-full sm:w-56 rounded-lg text-sm"
                         value={userSearch}
                         onChange={(e) => setUserSearch(e.target.value)}
                       />
@@ -1124,8 +1126,8 @@ export function AdminClientPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="rounded-xl border overflow-hidden">
-                  <Table>
+                <div className="rounded-xl border overflow-hidden table-responsive">
+                  <Table className="min-w-[500px]">
                     <TableHeader>
                       <TableRow className="bg-muted/30">
                         <TableHead className="font-semibold">User</TableHead>
@@ -1245,7 +1247,7 @@ export function AdminClientPage() {
                     {pendingUsers.map((pUser) => (
                       <div
                         key={pUser.id}
-                        className="flex items-center gap-4 p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors"
+                        className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border bg-card hover:bg-muted/30 transition-colors"
                       >
                         <div className="h-11 w-11 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white font-bold text-lg shadow-sm">
                           {pUser.name.charAt(0).toUpperCase()}
@@ -1273,11 +1275,11 @@ export function AdminClientPage() {
                         <Badge variant="secondary" className="text-xs">
                           {pUser.role}
                         </Badge>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                            className="h-8 rounded-lg border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex-1 sm:flex-none"
                             onClick={() => handleApproveClick(pUser)}
                             disabled={isPending}
                           >
@@ -1286,7 +1288,7 @@ export function AdminClientPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 rounded-lg border-red-200 text-red-700 hover:bg-red-50"
+                            className="h-8 rounded-lg border-red-200 text-red-700 hover:bg-red-50 flex-1 sm:flex-none"
                             onClick={() => handleRejectClick(pUser)}
                             disabled={isPending}
                           >
@@ -1313,7 +1315,7 @@ export function AdminClientPage() {
           <TabsContent value="inspections" className="mt-6">
             <Card className="rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base">All Inspections</CardTitle>
                     <CardDescription className="text-xs">
@@ -1327,7 +1329,7 @@ export function AdminClientPage() {
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Search inspections..."
-                      className="pl-9 h-9 w-56 rounded-lg text-sm"
+                      className="pl-9 h-9 w-full sm:w-56 rounded-lg text-sm"
                       value={inspectionSearch}
                       onChange={(e) => setInspectionSearch(e.target.value)}
                     />
@@ -1438,7 +1440,7 @@ export function AdminClientPage() {
           <TabsContent value="activity-logs" className="mt-6">
             <Card className="rounded-2xl shadow-sm">
               <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base flex items-center gap-2">
                       <Activity className="h-4 w-4 text-violet-600" />
@@ -1449,11 +1451,11 @@ export function AdminClientPage() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="relative">
+                    <div className="relative flex-1 sm:flex-none">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         placeholder="Search logs..."
-                        className="pl-9 h-9 w-56 rounded-lg text-sm"
+                        className="pl-9 h-9 w-full sm:w-56 rounded-lg text-sm"
                         value={activitySearch}
                         onChange={(e) => setActivitySearch(e.target.value)}
                       />
@@ -1474,8 +1476,8 @@ export function AdminClientPage() {
               </CardHeader>
               <CardContent>
                 {filteredActivityLogs.length > 0 ? (
-                  <div className="rounded-xl border overflow-hidden">
-                    <Table>
+                  <div className="rounded-xl border overflow-hidden table-responsive">
+                    <Table className="min-w-[800px]">
                       <TableHeader>
                         <TableRow className="bg-muted/30">
                           <TableHead className="font-semibold">Date & Time</TableHead>

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AppProvider } from '@/context/AppContext';
 import { Toaster } from '@/components/ui/toaster';
+import { ServiceWorkerRegistration } from '@/components/ServiceWorkerRegistration';
 
 export const metadata: Metadata = {
   title: 'InspectX',
@@ -9,17 +10,29 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/app-logo.png', sizes: '192x192', type: 'image/png' },
+      { url: '/app-logo.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: '/apple-touch-icon.png',
-    shortcut: '/favicon-32x32.png',
+    apple: '/app-logo.png',
+    shortcut: '/app-logo.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'InspectX',
+  },
+  formatDetection: {
+    telephone: false,
   },
 };
 
 
 export const viewport: Viewport = {
   themeColor: "#29ABE2",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 
@@ -39,6 +52,7 @@ export default function RootLayout({
         <AppProvider>
           {children}
           <Toaster />
+          <ServiceWorkerRegistration />
         </AppProvider>
       </body>
     </html>
