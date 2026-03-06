@@ -206,7 +206,7 @@ export function DashboardClientPage() {
   }, [user]);
   
   const [activeTab, setActiveTab] = useState<InspectionStatus | "all">("all");
-  const [priorityFilter, setPriorityFilter] = useState<Priority[]>(['High', 'Medium', 'Low']);
+  const [priorityFilter, setPriorityFilter] = useState<Priority[]>(['Critical', 'High', 'Medium', 'Low']);
 
   const handlePriorityFilterChange = (priority: Priority) => {
     setPriorityFilter(prev => 
@@ -230,7 +230,7 @@ export function DashboardClientPage() {
     if (activeTab !== 'all') {
       filtered = filtered.filter(i => i.status === activeTab);
     }
-    if (priorityFilter.length < 3) {
+    if (priorityFilter.length < 4) {
        filtered = filtered.filter(i => priorityFilter.includes(i.priority));
     }
     return filtered;
@@ -556,6 +556,12 @@ export function DashboardClientPage() {
                   <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
                       <DropdownMenuLabel>Filter by priority</DropdownMenuLabel>
                       <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem 
+                        checked={priorityFilter.includes('Critical')}
+                        onCheckedChange={() => handlePriorityFilterChange('Critical')}
+                      >
+                        Critical
+                      </DropdownMenuCheckboxItem>
                       <DropdownMenuCheckboxItem 
                         checked={priorityFilter.includes('High')}
                         onCheckedChange={() => handlePriorityFilterChange('High')}
